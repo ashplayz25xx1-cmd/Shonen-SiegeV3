@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/Shonen_Siege/',
+  base: '/Shonen-SiegeV3/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
