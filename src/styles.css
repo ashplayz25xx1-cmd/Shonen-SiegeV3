@@ -95,3 +95,55 @@ radial-gradient(circle at 50% 50%,#151c27,#0b0e16 72%);background-size:34px 34px
 .road-svg polyline:first-child{stroke:rgba(0,0,0,.55);stroke-width:12}.road-svg polyline:nth-child(2){stroke:#8a8067;stroke-width:8}.road-svg polyline:nth-child(3){stroke:#d5c49a;stroke-width:1.2;stroke-dasharray:1.8 2.8}
 .summon-buttons{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}.summon-buttons button{min-width:210px}.skip-setting{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;color:#9aa4b5;font-size:11px}.skip-setting input{accent-color:#8974ff}.reveal-head small{display:block;color:#8792a5;margin-top:4px}.reveal-head button:disabled{opacity:.35;cursor:not-allowed}
 .best-reveal-backdrop{position:fixed;inset:0;z-index:100;background:#05070be8;backdrop-filter:blur(10px);display:grid;place-items:center;padding:20px}.best-reveal-modal{width:min(420px,100%);padding:28px;border:1px solid #414b61;border-radius:22px;background:linear-gradient(145deg,#171d2b,#0b0f17);box-shadow:0 30px 100px #000c;text-align:center}.best-reveal-modal h2{margin:12px 0 2px}.best-reveal-modal p{color:#8f9aaf;margin:5px 0 20px}.best-card-art{height:210px;width:170px;margin:18px auto;border:2px solid #5e6a80;border-radius:18px;background:radial-gradient(circle at 50% 30%,#3d4860,#0c111b 70%);display:grid;place-items:center;overflow:hidden}.best-card-art strong{font-size:58px;color:#e6ebff}.best-card-art img{width:100%;height:100%;object-fit:cover}.best-card-art.epic{border-color:#a879ff}.best-card-art.legendary{border-color:#ffbf5e}.best-card-art.mythic{border-color:#ff6588;box-shadow:0 0 28px #ff658844}
+
+
+/* V3.2 gameplay pass: restrained V1-inspired battlefield, smoother route and clearer roles */
+.map {
+  min-height: 610px;
+  background:
+    radial-gradient(ellipse at 12% 18%, rgba(89, 114, 161, .18), transparent 28%),
+    radial-gradient(ellipse at 86% 80%, rgba(44, 129, 133, .13), transparent 32%),
+    linear-gradient(rgba(230,239,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230,239,255,.035) 1px, transparent 1px),
+    linear-gradient(145deg,#1a2038,#151a2c 56%,#101625);
+  background-size:auto,auto,36px 36px,36px 36px,auto;
+  border:1px solid #39435d;
+}
+.map:before {
+  opacity:.45;
+  background-image:
+    radial-gradient(ellipse at 15% 20%,rgba(159,174,203,.14) 0 1%,transparent 1.3%),
+    radial-gradient(ellipse at 89% 23%,rgba(159,174,203,.11) 0 1.2%,transparent 1.5%),
+    radial-gradient(ellipse at 21% 82%,rgba(159,174,203,.10) 0 1%,transparent 1.5%),
+    radial-gradient(ellipse at 76% 83%,rgba(159,174,203,.12) 0 1.3%,transparent 1.6%);
+  background-size:100% 100%;
+}
+.road-svg polyline:first-child{stroke:rgba(4,8,18,.75);stroke-width:11;stroke-linecap:round;stroke-linejoin:round}
+.road-svg polyline:nth-child(2){stroke:#565e78;stroke-width:7.5;stroke-linecap:round;stroke-linejoin:round}
+.road-svg polyline:nth-child(3){stroke:#a8b7d7;stroke-width:.8;stroke-dasharray:1.7 2.5;stroke-linecap:round;opacity:.72}
+.gate{left:1.2%;top:42%;background:#162239;border-color:#70d4d1;color:#a9f1ec;box-shadow:0 0 18px #67c9c933}
+.core{right:1.5%;bottom:auto;top:35%;font-size:14px;letter-spacing:.12em;color:#ffe1a0;background:#302b38;border:1px solid #a78c59;border-radius:10px;padding:10px 8px;box-shadow:0 0 22px #f0c56b22}
+.enemy-token{z-index:8;text-align:center;pointer-events:none;filter:drop-shadow(0 4px 7px rgba(0,0,0,.42))}
+.enemy-icon{display:grid;place-items:center;width:30px;height:30px;margin:auto;border:1.5px solid #c1cbe0;border-radius:9px;background:linear-gradient(145deg,#34415d,#1b2539);color:#f4f7ff;font-size:17px;font-weight:900;box-shadow:0 3px 12px #0006}
+.enemy-token.normal .enemy-icon{border-color:#e4c58b;color:#ffe5ae;border-radius:50%;background:linear-gradient(145deg,#6d5438,#332a26)}
+.enemy-token.fast .enemy-icon{border-color:#72dce4;color:#b7ffff;border-radius:6px;transform:rotate(45deg);background:linear-gradient(145deg,#1d657a,#193244)}
+.enemy-token.fast .enemy-icon{font-size:17px}
+.enemy-token.tank .enemy-icon{width:38px;height:34px;border-color:#b6a6e9;color:#e4d9ff;border-radius:6px;background:linear-gradient(145deg,#554379,#2d2548)}
+.enemy-token.regen .enemy-icon{border-color:#81d7aa;color:#b9ffd5;border-radius:50%;background:linear-gradient(145deg,#285f4c,#1b352f)}
+.enemy-token.shield .enemy-icon{border-color:#76bfe9;color:#c5eeff;background:linear-gradient(145deg,#2f5f85,#1c3147)}
+.enemy-token.armored .enemy-icon{border-color:#d5bb7c;color:#ffedb7;border-radius:4px;background:linear-gradient(145deg,#725d36,#3b3021)}
+.enemy-token.boss .enemy-icon{width:48px;height:48px;border-radius:14px;border:2px solid #fa8d9e;background:linear-gradient(145deg,#8a3657,#391a35);color:#ffe1e8;font-size:22px;box-shadow:0 0 22px #f75d8244}
+.enemy-health{width:48px;height:5px;background:#080c14;border:1px solid #68738d;border-radius:99px;margin:3px auto 0;overflow:hidden}
+.enemy-health i{background:linear-gradient(90deg,#ff647e,#ffb081)}
+.boss-tag{font-size:8px;bottom:-20px;color:#ffebf0;background:#451e35;border-color:#a54d6f}
+.role-badge{display:inline-flex;align-items:center;gap:5px;margin:7px 0 2px;padding:5px 7px;border:1px solid #866a30;border-radius:7px;background:#3b301d;color:#ffe4a3;font-size:9px;font-weight:900;letter-spacing:.04em}
+@media(max-width:780px){.map{min-height:500px}.core{font-size:11px;padding:7px 5px}.gate{font-size:8px}}
+
+
+/* V3.3 — rotating verse banners, configurable art, hills and role-specific UI */
+.banner-selector{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 16px}
+.banner-option{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:16px 18px;background:#111725;border:1px solid #303a50;border-radius:14px;color:#dfe6f4;transition:border-color .15s,background .15s}
+.banner-option strong{font-size:15px;letter-spacing:.05em}.banner-option small{color:#939fb2;font-size:11px}.banner-option.active{border-color:#a28aff;background:linear-gradient(135deg,#211a43,#151b2a);box-shadow:inset 0 0 0 1px #8c73ff25}.verse-option.active{border-color:#71d5b0;background:linear-gradient(135deg,#18382f,#151b2a)}
+.banner-roster-actions{margin:12px 0 0}.banner-roster{margin-top:10px;padding:14px;border:1px solid #2b3548;border-radius:12px;background:#0b1019;text-align:left}.banner-pool-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:10px;max-height:350px;overflow:auto}.banner-pool-card{display:flex;flex-direction:column;gap:4px;padding:9px 10px;background:#141b29;border:1px solid #283348;border-radius:9px;min-width:0}.banner-pool-card span{font-size:9px;text-transform:uppercase;font-weight:950}.banner-pool-card b{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.banner-pool-card small{font-size:9px;color:#8d99ad;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.income-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.support-role-badge{border-color:#477d88;background:#173039;color:#a6eff4}.placed-unit:has(small:first-of-type){cursor:pointer}.placed-unit small{white-space:nowrap}.enemy-icon img{width:100%;height:100%;object-fit:cover;border-radius:inherit}.terrain-svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}.road-svg{z-index:2;pointer-events:none}.map:before{z-index:1}.gate,.core{z-index:3}.support-range-ring{border-color:#79dfd0!important;border-style:dashed!important;box-shadow:0 0 18px #79dfd022}
+@media(max-width:780px){.banner-selector{grid-template-columns:1fr}.banner-pool-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.income-stat-grid{grid-template-columns:1fr}.summon-buttons button{width:100%}}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { GAME_BALANCE, ENEMY_BALANCE, CHARACTER_OVERRIDES, CHARACTER_ART, ENEMY_ART, ROSTER_ADDITIONS } from './game-config.js';
 
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
 
@@ -19,6 +20,7 @@ const COPY_LIMIT = { Common: 3, Uncommon: 3, Rare: 3, Epic: 2, Legendary: 2, Myt
 const UPGRADE_LIMIT = { Common: 3, Uncommon: 3, Rare: 5, Epic: 6, Legendary: 7, Mythic: 9 };
 const SINGLE_COST = 100;
 const FIVE_COST = 450;
+const TEN_COST = 900;
 const SLOT_RULES = {
   4: { wave: 10, gems: 250 },
   5: { wave: 25, gems: 500 },
@@ -26,7 +28,7 @@ const SLOT_RULES = {
 const BASE_DROP_RATES = { Common: 45, Uncommon: 25, Rare: 16, Epic: 9, Legendary: 4, Mythic: 1 };
 const PITY = { Rare: 10, Epic: 25, Legendary: 50, Mythic: 100 };
 
-const CHARACTERS = [
+const CORE_CHARACTERS = [
   {id:'naruto', name:'Naruto Uzumaki', anime:'Naruto', rarity:'Rare', cost:250, baseDamage:34, range:115, attackSpeed:650, abilities:['Shadow Clone','Rasengan','Rasenshuriken']},
   {id:'ichigo', name:'Ichigo Kurosaki', anime:'Bleach', rarity:'Legendary', cost:450, baseDamage:48, range:125, attackSpeed:700, abilities:['Zangetsu Slash','Getsuga Tensho','Bankai']},
   {id:'goku', name:'Son Goku', anime:'Dragon Ball', rarity:'Mythic', cost:650, baseDamage:75, range:145, attackSpeed:800, abilities:['Ki Blast','Kamehameha','Ultra Instinct']},
@@ -35,10 +37,10 @@ const CHARACTERS = [
   {id:'denji', name:'Denji', anime:'Chainsaw Man', rarity:'Epic', cost:320, baseDamage:46, range:105, attackSpeed:520, abilities:['Chainsaw Slash','Rev Up','Full Devil']},
   {id:'deku', name:'Izuku Midoriya', anime:'My Hero Academia', rarity:'Rare', cost:280, baseDamage:37, range:120, attackSpeed:610, abilities:['Delaware Smash','Blackwhip','Full Cowl']},
   {id:'killua', name:'Killua Zoldyck', anime:'Hunter x Hunter', rarity:'Rare', cost:230, baseDamage:29, range:108, attackSpeed:390, abilities:['Godspeed','Lightning Palm','Whirlwind']},
-  {id:'tanjiro', name:'Tanjiro Kamado', anime:'Demon Slayer', rarity:'Uncommon', cost:180, baseDamage:24, range:112, attackSpeed:570, abilities:['Water Wheel','Hinokami Kagura','Sun Halo Dragon']},
+  {id:'tanjiro', name:'Tanjiro Kamado', anime:'Demon Slayer', rarity:'Common', cost:180, baseDamage:24, range:112, attackSpeed:570, abilities:['Water Wheel','Hinokami Kagura','Sun Halo Dragon']},
   {id:'asta', name:'Asta', anime:'Black Clover', rarity:'Epic', cost:340, baseDamage:45, range:105, attackSpeed:620, abilities:['Demon Slash','Black Form','Black Divider']},
   {id:'saitama', name:'Saitama', anime:'One Punch Man', rarity:'Mythic', cost:800, baseDamage:110, range:105, attackSpeed:1100, abilities:['Normal Punch','Serious Series','Serious Punch']},
-  {id:'gon', name:'Gon Freecss', anime:'Hunter x Hunter', rarity:'Uncommon', cost:190, baseDamage:27, range:95, attackSpeed:600, abilities:['Rock','Scissors','Jajanken']},
+  {id:'gon', name:'Gon Freecss', anime:'Hunter x Hunter', rarity:'Common', cost:190, baseDamage:27, range:95, attackSpeed:600, abilities:['Rock','Scissors','Jajanken']},
 
   {id:'sasuke', name:'Sasuke Uchiha', anime:'Naruto', rarity:'Epic', cost:380, baseDamage:44, range:120, attackSpeed:610, abilities:['Chidori','Amaterasu','Susanoo']},
   {id:'kakashi', name:'Kakashi Hatake', anime:'Naruto', rarity:'Legendary', cost:470, baseDamage:50, range:135, attackSpeed:720, abilities:['Lightning Blade','Kamui','Copy Ninja']},
@@ -48,9 +50,9 @@ const CHARACTERS = [
   {id:'byakuya', name:'Byakuya Kuchiki', anime:'Bleach', rarity:'Epic', cost:390, baseDamage:45, range:145, attackSpeed:760, abilities:['Senbonzakura','Bankai','Petal Storm']},
   {id:'zoro', name:'Roronoa Zoro', anime:'One Piece', rarity:'Legendary', cost:460, baseDamage:52, range:105, attackSpeed:580, abilities:['Three Sword Style','Asura','King of Hell']},
   {id:'sanji', name:'Sanji', anime:'One Piece', rarity:'Rare', cost:270, baseDamage:34, range:100, attackSpeed:430, abilities:['Diable Jambe','Sky Walk','Ifrit Jambe']},
-  {id:'nami', name:'Nami', anime:'One Piece', rarity:'Uncommon', cost:175, baseDamage:22, range:140, attackSpeed:650, abilities:['Clima-Tact','Thunderbolt','Zeus']},
+  {id:'nami', name:'Nami', anime:'One Piece', rarity:'Epic', role:'money', incomePerWave:420, cost:350, baseDamage:0, range:0, attackSpeed:0, abilities:['Weather Forecast','Clima-Tact','Zeus']},
   {id:'megumi', name:'Megumi Fushiguro', anime:'Jujutsu Kaisen', rarity:'Rare', cost:275, baseDamage:33, range:125, attackSpeed:650, abilities:['Divine Dogs','Nue','Chimera Shadow']},
-  {id:'yuji', name:'Yuji Itadori', anime:'Jujutsu Kaisen', rarity:'Uncommon', cost:190, baseDamage:25, range:95, attackSpeed:500, abilities:['Divergent Fist','Black Flash','Cursed Energy']},
+  {id:'yuji', name:'Yuji Itadori', anime:'Jujutsu Kaisen', rarity:'Common', cost:190, baseDamage:25, range:95, attackSpeed:500, abilities:['Divergent Fist','Black Flash','Cursed Energy']},
   {id:'sukuna', name:'Ryomen Sukuna', anime:'Jujutsu Kaisen', rarity:'Mythic', cost:790, baseDamage:98, range:135, attackSpeed:900, abilities:['Dismantle','Cleave','Malevolent Shrine']},
   {id:'power', name:'Power', anime:'Chainsaw Man', rarity:'Rare', cost:255, baseDamage:33, range:100, attackSpeed:540, abilities:['Blood Hammer','Blood Spear','Blood Fiend']},
   {id:'makima', name:'Makima', anime:'Chainsaw Man', rarity:'Legendary', cost:520, baseDamage:55, range:155, attackSpeed:900, abilities:['Control','Crush','Contract']},
@@ -60,7 +62,7 @@ const CHARACTERS = [
   {id:'hisoka', name:'Hisoka', anime:'Hunter x Hunter', rarity:'Epic', cost:350, baseDamage:40, range:120, attackSpeed:600, abilities:['Bungee Gum','Texture Surprise','Trickster']},
   {id:'kurapika', name:'Kurapika', anime:'Hunter x Hunter', rarity:'Rare', cost:280, baseDamage:34, range:125, attackSpeed:650, abilities:['Dowsing Chain','Judgment Chain','Emperor Time']},
   {id:'zenitsu', name:'Zenitsu Agatsuma', anime:'Demon Slayer', rarity:'Rare', cost:265, baseDamage:35, range:95, attackSpeed:390, abilities:['Thunderclap','Sixfold','Godspeed']},
-  {id:'inosuke', name:'Inosuke Hashibira', anime:'Demon Slayer', rarity:'Uncommon', cost:185, baseDamage:26, range:95, attackSpeed:470, abilities:['Beast Breathing','Fang Rush','Spatial Awareness']},
+  {id:'inosuke', name:'Inosuke Hashibira', anime:'Demon Slayer', rarity:'Common', cost:185, baseDamage:26, range:95, attackSpeed:470, abilities:['Beast Breathing','Fang Rush','Spatial Awareness']},
   {id:'rengoku', name:'Kyojuro Rengoku', anime:'Demon Slayer', rarity:'Legendary', cost:465, baseDamage:51, range:115, attackSpeed:600, abilities:['Flame Tiger','Purgatory','Flame Breathing']},
   {id:'yami', name:'Yami Sukehiro', anime:'Black Clover', rarity:'Legendary', cost:475, baseDamage:54, range:120, attackSpeed:700, abilities:['Dark Cloaked','Dimension Slash','Death Thrust']},
   {id:'yuno', name:'Yuno', anime:'Black Clover', rarity:'Epic', cost:375, baseDamage:43, range:150, attackSpeed:740, abilities:['Wind Blade','Spirit Dive','Star Magic']},
@@ -71,14 +73,36 @@ const CHARACTERS = [
   {id:'trunks', name:'Future Trunks', anime:'Dragon Ball', rarity:'Epic', cost:390, baseDamage:45, range:115, attackSpeed:570, abilities:['Burning Attack','Sword Slash','Final Hope']},
   {id:'obito', name:'Obito Uchiha', anime:'Naruto', rarity:'Mythic', cost:770, baseDamage:94, range:140, attackSpeed:850, abilities:['Kamui','Fire Style','Ten Tails']},
   {id:'kenpachi', name:'Kenpachi Zaraki', anime:'Bleach', rarity:'Legendary', cost:490, baseDamage:57, range:100, attackSpeed:720, abilities:['Nozarashi','Battle Instinct','Meteor Strike']},
-  {id:'chopper', name:'Tony Tony Chopper', anime:'One Piece', rarity:'Uncommon', cost:180, baseDamage:24, range:95, attackSpeed:520, abilities:['Guard Point','Heavy Point','Monster Point']},
+  {id:'chopper', name:'Tony Tony Chopper', anime:'One Piece', rarity:'Common', cost:180, baseDamage:24, range:95, attackSpeed:520, abilities:['Guard Point','Heavy Point','Monster Point']},
   {id:'shikamaru', name:'Shikamaru Nara', anime:'Naruto', rarity:'Rare', cost:250, baseDamage:30, range:155, attackSpeed:820, abilities:['Shadow Possession','Shadow Stitch','Shadow Strangle']},
+  {id:'bulma', name:'Bulma', anime:'Dragon Ball', rarity:'Mythic', role:'money', incomePerWave:750, cost:650, baseDamage:0, range:0, attackSpeed:0, abilities:['Capsule Corporation','Bulma’s Invention','Super Dragon Radar']},
+  {id:'ramen-guy', name:'Ramen Guy (Teuchi)', anime:'Naruto', rarity:'Legendary', role:'money', incomePerWave:560, cost:520, baseDamage:0, range:0, attackSpeed:0, abilities:['Warm Bowl','Village Discount','Hidden Leaf Feast']},
 ];
 
-// BALANCING: adjust each character's baseDamage, range, attackSpeed and cost in CHARACTERS above.
-// ARTWORK: add files under public/characters and map character IDs to their relative URLs here.
-const CHARACTER_ART = {};
-const characterImage = (save, id) => save.cardImages?.[id] || CHARACTER_ART[id] || '';
+function buildRosterCharacter(entry, index) {
+  const stats = GAME_BALANCE.rarityDefaults[entry.rarity] || GAME_BALANCE.rarityDefaults.Rare;
+  const firstName = entry.name.split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, '');
+  return {
+    ...entry,
+    cost: stats.cost + (index % 4) * 12,
+    baseDamage: entry.role === 'money' ? 0 : stats.damage + (index % 4) * 3,
+    range: entry.role === 'money' ? 0 : stats.range + (index % 5) * 4,
+    attackSpeed: entry.role === 'money' ? 0 : stats.attackSpeed + (index % 5) * 20,
+    abilities: entry.abilities || [`${firstName} Technique`, `${firstName} Awakening`, `${firstName} Ultimate`],
+  };
+}
+
+const CHARACTERS = [...CORE_CHARACTERS, ...ROSTER_ADDITIONS.map(buildRosterCharacter)]
+  .map(character => ({ ...character, ...(CHARACTER_OVERRIDES[character.id] || {}) }));
+
+// Image paths are stored in src/game-config.js as paths relative to public/.
+const publicAsset = (path) => `${import.meta.env.BASE_URL}${String(path || '').replace(/^\/+/, '')}`;
+const characterImage = (save, id) => save.cardImages?.[id] || (CHARACTER_ART[id] ? publicAsset(CHARACTER_ART[id]) : '');
+const enemyImage = (type) => ENEMY_ART[type] ? publicAsset(ENEMY_ART[type]) : '';
+const unitIncome = (unit) => unit?.card?.role === 'money'
+  ? Math.round((unit.card.incomePerWave || 0) * (1 + Math.max(0, (unit.level || 1) - 1) * GAME_BALANCE.incomeUpgradeMultiplier))
+  : 0;
+
 const STARTERS = ['naruto','deku','tanjiro'];
 
 function freshSave() {
@@ -131,8 +155,12 @@ function getIcon(char) {
     'Dragon Ball':'KI', 'Bleach':'魂', 'Naruto':'忍', 'Jujutsu Kaisen':'呪',
     'One Piece':'海', 'Chainsaw Man':'刃', 'My Hero Academia':'PLUS',
     'Hunter x Hunter':'H×H', 'Demon Slayer':'炎', 'Black Clover':'♣', 'One Punch Man':'拳',
+    'Attack on Titan':'AOT', 'Solo Leveling':'SL', 'Spy x Family':'S×F', 'Mob Psycho 100':'MP',
+    'Tokyo Revengers':'TR', 'Mashle':'M', 'Food Wars':'FW', 'Frieren: Beyond Journey’s End':'FR',
+    'JoJo’s Bizarre Adventure':'JJ', 'Fairy Tail':'FT', 'Fate':'FATE', 'Death Note':'DN',
+    'That Time I Got Reincarnated as a Slime':'SLIME', 'The Misfit of Demon King Academy':'MISFIT',
   };
-  return map[char.anime] || '✦';
+  return map[char.anime] || char.name.split(/\s+/).map(p=>p[0]).join('').slice(0,3).toUpperCase() || '✦';
 }
 
 function gemReward(wave) {
@@ -141,20 +169,16 @@ function gemReward(wave) {
 }
 
 function cashReward(wave, type='normal') {
-  const base = {normal:14, fast:18, tank:34, regen:28, shield:31, armored:36, boss:220}[type] || 14;
-  return Math.round(base * (1 + wave * 0.075));
+  const base = {normal:24, fast:28, tank:40, regen:34, shield:36, armored:42, boss:260}[type] || 24;
+  return Math.round(base * (1 + wave * 0.045) * GAME_BALANCE.enemyCashMultiplier);
 }
 
 function enemyFor(wave, index, total, id) {
-  const bossWave = wave % 4 === 0;
+  const bossWave = wave % GAME_BALANCE.bossEveryWaves === 0;
   if (bossWave && index === total - 1) {
-    const bossTypes = [
-      {name:'Ravager', hp:2400 + wave * 170, speed:0.021, damage:10, armor:0.08, shield:0},
-      {name:'Warden', hp:3000 + wave * 190, speed:0.016, damage:9, armor:0.16, shield:950 + wave * 30},
-      {name:'Reaper', hp:2050 + wave * 150, speed:0.028, damage:12, armor:0.06, shield:450 + wave * 18},
-    ];
-    const b = bossTypes[(wave / 4 - 1) % bossTypes.length];
-    return {id, type:'boss', name:b.name, progress:0, hp:b.hp, maxHp:b.hp, speed:b.speed, damage:b.damage, armor:b.armor, shield:b.shield, regen:0, reward:cashReward(wave,'boss')};
+    const b = ENEMY_BALANCE.bosses[(Math.floor(wave / GAME_BALANCE.bossEveryWaves) - 1) % ENEMY_BALANCE.bosses.length];
+    const hp = b.hp + wave * b.hpPerWave;
+    return {id, type:'boss', name:b.name, progress:-0.035*(index+1), hp, maxHp:hp, speed:b.speed, damage:100, armor:b.armor, shield:b.shield + wave * 20, regen:0, reward:cashReward(wave,'boss')};
   }
   const roll = (index + wave) % 19;
   let type = 'normal';
@@ -163,33 +187,39 @@ function enemyFor(wave, index, total, id) {
   else if (wave >= 14 && roll < 6) type = 'regen';
   else if (wave >= 18 && roll < 8) type = 'shield';
   else if (wave >= 22 && roll < 10) type = 'armored';
-  const stats = {
-    normal: {hp:85, speed:0.035, damage:3, armor:0, shield:0, regen:0},
-    fast: {hp:62, speed:0.056, damage:4, armor:0, shield:0, regen:0},
-    tank: {hp:230, speed:0.020, damage:7, armor:0.08, shield:0, regen:0},
-    regen: {hp:150, speed:0.026, damage:5, armor:0, shield:0, regen:2.8},
-    shield: {hp:130, speed:0.028, damage:5, armor:0, shield:95 + wave * 3, regen:0},
-    armored: {hp:190, speed:0.022, damage:6, armor:0.25, shield:0, regen:0},
-  };
-  const s = stats[type];
-  const hp = Math.round(s.hp * (1 + wave * 0.12) * (1 + Math.max(0, index-total*0.5) * 0.015));
-  return {id, type, name:type, progress:-0.035 * (index+1), hp, maxHp:hp, speed:s.speed*(1+wave*0.012), damage:s.damage, armor:s.armor, shield:s.shield, regen:s.regen, reward:cashReward(wave,type)};
+  const st = ENEMY_BALANCE[type] || ENEMY_BALANCE.normal;
+  const hp = Math.round(st.hp * (1 + wave * GAME_BALANCE.enemyHealthPerWave) * (1 + Math.max(0, index-total*0.5) * 0.01));
+  return {id, type, name:type, progress:-0.035*(index+1), hp, maxHp:hp, speed:st.speed*(1+wave*0.01), damage:st.damage, armor:st.armor, shield:st.shield + (type==='shield' ? wave*2 : 0), regen:st.regen, reward:cashReward(wave,type)};
 }
 
 const PATH = [
-  [5, 12], [23, 12], [30, 18], [30, 30], [20, 36],
-  [12, 43], [12, 55], [22, 62], [40, 62], [48, 55],
-  [48, 43], [58, 36], [72, 36], [82, 44], [82, 58],
-  [70, 65], [58, 72], [58, 83], [72, 89], [92, 89],
+  [4,50], [9,50], [14,47], [19,42], [25,39], [31,40], [37,44],
+  [42,50], [47,56], [53,60], [59,61], [65,58], [70,53], [74,47],
+  [79,43], [84,42], [89,45], [93,51], [97,53],
 ];
+const PATH_SEGMENTS = PATH.slice(0,-1).map((p,i)=>Math.hypot(PATH[i+1][0]-p[0],PATH[i+1][1]-p[1]));
+const PATH_TOTAL_LENGTH = PATH_SEGMENTS.reduce((sum,n)=>sum+n,0);
 
 function pathPosition(progress) {
-  const p = Math.max(0, Math.min(1, progress));
-  const scaled = p * (PATH.length - 1);
-  const i = Math.min(PATH.length - 2, Math.floor(scaled));
-  const t = scaled - i;
-  const a = PATH[i], b = PATH[i+1];
-  return {x:a[0] + (b[0]-a[0])*t, y:a[1] + (b[1]-a[1])*t};
+  // Move enemies at a consistent rate along the route. Negative progress keeps the spawn queue spaced out.
+  if (progress < 0) {
+    const a = PATH[0], b = PATH[1];
+    const len = PATH_SEGMENTS[0] || 1;
+    const distance = progress * PATH_TOTAL_LENGTH;
+    return {x:a[0] + (b[0]-a[0]) / len * distance, y:a[1] + (b[1]-a[1]) / len * distance};
+  }
+  const distance = Math.min(1, progress) * PATH_TOTAL_LENGTH;
+  let elapsed = 0;
+  for (let i=0;i<PATH_SEGMENTS.length;i++) {
+    const segment = PATH_SEGMENTS[i];
+    if (distance <= elapsed + segment || i === PATH_SEGMENTS.length - 1) {
+      const t = Math.max(0, Math.min(1, (distance-elapsed) / (segment || 1)));
+      const a=PATH[i], b=PATH[i+1];
+      return {x:a[0] + (b[0]-a[0])*t, y:a[1] + (b[1]-a[1])*t};
+    }
+    elapsed += segment;
+  }
+  return PATH[PATH.length-1];
 }
 
 function distancePct(x1,y1,x2,y2) {
@@ -220,13 +250,14 @@ function rollRarity(pity) {
   return 'Common';
 }
 
-function openPack(pity, count=5) {
+function openPack(pity, count=5, pool=CHARACTERS) {
   const nextPity = {...pity};
   const results = [];
   for (let i=0;i<count;i++) {
     const rarity = rollRarity(nextPity);
-    const pool = CHARACTERS.filter(c => c.rarity === rarity);
-    results.push(pool[Math.floor(Math.random()*pool.length)] || CHARACTERS[0]);
+    const rarityPool = pool.filter(c => c.rarity === rarity);
+    const candidates = rarityPool.length ? rarityPool : pool;
+    results.push(candidates[Math.floor(Math.random()*candidates.length)] || CHARACTERS[0]);
     for (const r of Object.keys(nextPity)) nextPity[r] += 1;
     if (rarityRank(rarity) >= 2) nextPity.Rare = 0;
     if (rarityRank(rarity) >= 3) nextPity.Epic = 0;
@@ -238,6 +269,23 @@ function openPack(pity, count=5) {
 
 function rarityRank(r) {
   return RARITIES.indexOf(r);
+}
+
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const ch of String(value)) { hash ^= ch.charCodeAt(0); hash = Math.imul(hash, 16777619); }
+  return hash >>> 0;
+}
+function getRotatingVerse(now, verses) {
+  if (!verses.length) return 'Naruto';
+  const slotLength = GAME_BALANCE.verseBannerMinutes * 60 * 1000;
+  const slot = Math.floor(now / slotLength);
+  let index = stableHash(`verse-${slot}`) % verses.length;
+  if (slot > 0 && verses.length > 1) {
+    const previousIndex = stableHash(`verse-${slot-1}`) % verses.length;
+    if (index === previousIndex) index = (index + 1 + (stableHash(`fallback-${slot}`) % (verses.length - 1))) % verses.length;
+  }
+  return verses[index];
 }
 
 function App() {
@@ -347,9 +395,9 @@ function Home({save,uniqueOwned,setPage}) {
       )}
 
       <section className="feature-grid">
-        <Feature title="Cash stays in the run" body="Cash is only for deploying and upgrading during Infinite Mode. It never replaces gems." icon="💰"/>
+        <Feature title="Cash stays in the run" body="Cash is only for deploying and upgrading during Infinite Mode. Money-role units add bonus cash after each cleared wave." icon="💰"/>
         <Feature title="Gems survive a loss" body="Every cleared wave pays gems immediately. Lose later and you still keep everything already earned." icon="💎"/>
-        <Feature title="Bosses every 4 waves" body="Ground enemies only: fast, tank, regen, shield, armored and rotating boss types." icon="👑"/>
+        <Feature title="Bosses every 4 waves" body="Bosses appear every 4 waves. Three normal enemies reaching the core end the run; a boss breaching it is fatal." icon="👑"/>
       </section>
     </main>
   );
@@ -368,6 +416,8 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
   const [query,setQuery] = useState('');
   const [sort,setSort] = useState('rarity');
   const [verse,setVerse] = useState('All Verses');
+  const [detailId,setDetailId] = useState(null);
+  const detailCharacter = detailId ? getChar(detailId) : null;
   const filtered = useMemo(() => {
     let list = CHARACTERS.filter(c => (filter==='All'||c.rarity===filter) && (verse==='All Verses'||c.anime===verse) && `${c.name} ${c.anime}`.toLowerCase().includes(query.toLowerCase()));
     if (sort==='rarity') list.sort((a,b)=>rarityRank(b.rarity)-rarityRank(a.rarity));
@@ -375,28 +425,6 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
     if (sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name));
     return list;
   },[filter,query,sort,verse,save.owned]);
-
-  const uploadImage = (id,file) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const max = 512;
-        const scale = Math.min(1, max/Math.max(img.width,img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(img.width*scale));
-        canvas.height = Math.max(1, Math.round(img.height*scale));
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img,0,0,canvas.width,canvas.height);
-        const data = canvas.toDataURL('image/webp',0.78);
-        setSave(s=>({...s,cardImages:{...s.cardImages,[id]:data}}));
-        notify('Character image saved to this browser.');
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
 
   const sellDuplicate = (id) => {
     const count = Number(save.owned[id]||0);
@@ -455,8 +483,11 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
                   <div className="char-body">
                     <div className="char-title"><h3>{c.name}</h3><span>{owned}×</span></div>
                     <p>{c.anime}</p>
+                    {c.role === 'money' && <div className="role-badge">💰 INCOME ONLY · +{c.incomePerWave} / WAVE</div>}
+                    {c.role === 'support' && <div className="role-badge support-role-badge">✦ SUPPORT · +{Math.round((c.buffPercent||0.13)*100)}% NEARBY DAMAGE</div>}
                     <div className="ability-row">{c.abilities.map(a=><span key={a}>{a}</span>)}</div>
-                    <div className="card-footer">
+                    <div className="card-footer card-footer-wrap">
+                      <button className="details-btn" onClick={()=>setDetailId(c.id)}>VIEW STATS</button>
                       <button className={isSelected?'selected-btn':''} disabled={owned===0} onClick={()=>toggleSquad(c.id)}>{isSelected?'REMOVE':'ADD TO SQUAD'}</button>
                       {owned>1 && <button className="sell-btn" onClick={()=>sellDuplicate(c.id)}>SELL DUPLICATE</button>}
                     </div>
@@ -491,32 +522,88 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
           </div>
         </aside>
       </div>
+      {detailCharacter && (() => {
+        const c = detailCharacter;
+        const maxLevel = UPGRADE_LIMIT[c.rarity];
+        const maxIncome = Math.round((c.incomePerWave || 0) * (1 + (maxLevel-1) * GAME_BALANCE.incomeUpgradeMultiplier));
+        const maxDamage = c.role === 'money' ? 0 : Math.round(c.baseDamage * Math.pow(1.3, maxLevel-1));
+        const baseFieldRange = c.role === 'money' ? 0 : Math.max(11, c.range/12);
+        const maxFieldRange = c.role === 'money' ? 0 : baseFieldRange + .9*(maxLevel-1);
+        const maxSpa = c.role === 'money' ? 0 : Math.max(220, c.attackSpeed - 38*(maxLevel-1)) / 1000;
+        const baseSpa = c.role === 'money' ? 0 : c.attackSpeed / 1000;
+        return <div className="stat-modal-backdrop" onClick={()=>setDetailId(null)}>
+          <section className="stat-modal" role="dialog" aria-modal="true" aria-label={`${c.name} statistics`} onClick={e=>e.stopPropagation()}>
+            <button className="stat-modal-close" onClick={()=>setDetailId(null)} aria-label="Close stats">×</button>
+            <div className="eyebrow">CHARACTER DOSSIER</div>
+            <div className="stat-modal-title"><span className="stat-modal-mark" style={{borderColor:RARITY_COLOR[c.rarity],color:RARITY_COLOR[c.rarity]}}>{characterImage(save,c.id)?<img src={characterImage(save,c.id)} alt=""/>:getIcon(c)}</span><div><h2>{c.name}</h2><p>{c.anime} · <b style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</b></p>{c.role==='money'&&<small className="role-badge">💰 +{c.incomePerWave} cash per cleared wave</small>}</div></div>
+            {c.role === 'money' ? <>
+              <div className="stat-compare-grid income-stat-grid">
+                <div className="stat-compare-card"><span>BASE INCOME</span><b>💰 {c.incomePerWave}</b><small>Cash per cleared wave · Lv.1</small></div>
+                <div className="stat-compare-card"><span>MAX INCOME</span><b>💰 {maxIncome}</b><small>Cash per cleared wave · Lv.{maxLevel}</small></div>
+                <div className="stat-compare-card"><span>INCOME PER UPGRADE</span><b>+{Math.round(GAME_BALANCE.incomeUpgradeMultiplier*100)}%</b><small>Each upgrade level</small></div>
+              </div>
+              <div className="stat-modal-bottom"><div><span className="eyebrow">ROLE</span><strong>Money only</strong></div><div><span className="eyebrow">UPGRADE CAP</span><strong>Lv.{maxLevel}</strong></div><div><span className="eyebrow">DEPLOY COST</span><strong>💰 {c.cost}</strong></div></div>
+              <p className="stat-footnote">Money units never attack: they have no damage, attack range, or attack speed. They earn cash only when a wave is cleared while deployed.</p>
+            </> : <>
+              <div className="stat-compare-grid">
+                <div className="stat-compare-card"><span>BASE DAMAGE</span><b>{c.baseDamage}</b><small>Lv.1</small></div>
+                <div className="stat-compare-card"><span>MAX DAMAGE</span><b>{maxDamage}</b><small>Lv.{maxLevel}</small></div>
+                <div className="stat-compare-card"><span>BASE SPA</span><b>{baseSpa.toFixed(2)}s</b><small>Seconds / attack</small></div>
+                <div className="stat-compare-card"><span>MAX SPA</span><b>{maxSpa.toFixed(2)}s</b><small>Seconds / attack</small></div>
+                <div className="stat-compare-card"><span>BASE RANGE</span><b>{baseFieldRange.toFixed(1)}</b><small>Field range</small></div>
+                <div className="stat-compare-card"><span>MAX RANGE</span><b>{maxFieldRange.toFixed(1)}</b><small>Field range</small></div>
+              </div>
+              <div className="stat-modal-bottom"><div><span className="eyebrow">UPGRADE CAP</span><strong>Lv.{maxLevel}</strong></div><div><span className="eyebrow">MAX-LEVEL DPS</span><strong>{Math.round(maxDamage/maxSpa)}</strong></div><div><span className="eyebrow">DEPLOY COST</span><strong>💰 {c.cost}</strong></div></div>
+              {c.role === 'support' && <p className="stat-footnote">Support role: nearby damage units gain +{Math.round((c.buffPercent||0.13)*100)}% damage while inside this unit’s support radius.</p>}
+              <div className="stat-ability-list"><span className="eyebrow">TECHNIQUE NAMES</span>{[[2,c.abilities[0]],[4,c.abilities[1]],[6,c.abilities[2]]].filter(([lv])=>lv<=maxLevel).map(([lv,a])=><span key={a}>Lv.{lv} · {a}</span>)}</div>
+            </>}
+          </section>
+        </div>;
+      })()}
     </main>
   );
 }
 
 function Summon({save,setSave,notify}) {
-  const [pack,setPack] = useState(null);
-  const [reveal,setReveal] = useState([]);
-  const [opening,setOpening] = useState(false);
-  const [bestReveal,setBestReveal] = useState(false);
-  const [skipBest,setSkipBest] = useState(()=>localStorage.getItem('shonen-siege-skip-best')==='true');
+  const [pack, setPack] = useState(null);
+  const [packBanner, setPackBanner] = useState('ALL-UNIT BANNER');
+  const [reveal, setReveal] = useState([]);
+  const [opening, setOpening] = useState(false);
+  const [bestReveal, setBestReveal] = useState(false);
+  const [showBannerRoster, setShowBannerRoster] = useState(false);
+  const [bannerMode, setBannerMode] = useState('all');
+  const [clock, setClock] = useState(Date.now());
+  const [skipBest, setSkipBest] = useState(()=>localStorage.getItem('shonen-siege-skip-best')==='true');
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const verses = useMemo(() => [...new Set(CHARACTERS.map(c=>c.anime))].sort(), []);
+  const activeVerse = getRotatingVerse(clock, verses);
+  const rotationMs = GAME_BALANCE.verseBannerMinutes * 60 * 1000;
+  const remainingMs = rotationMs - (clock % rotationMs);
+  const remainingLabel = `${Math.floor(remainingMs/60000)}:${String(Math.floor((remainingMs%60000)/1000)).padStart(2,'0')}`;
+  const bannerPool = bannerMode === 'all' ? CHARACTERS : CHARACTERS.filter(c=>c.anime===activeVerse);
   const pending = !!pack && reveal.length < pack.length;
   const open = (count) => {
     if (opening || pending) return;
-    const cost = count===1 ? SINGLE_COST : FIVE_COST;
+    const cost = count===1 ? SINGLE_COST : count===5 ? FIVE_COST : TEN_COST;
     if (save.gems < cost) return notify(`You need ${cost} gems.`);
+    const pool = bannerMode==='all' ? CHARACTERS : CHARACTERS.filter(c=>c.anime===activeVerse);
+    const bannerLabel = bannerMode==='all' ? 'ALL-UNIT BANNER' : `${activeVerse.toUpperCase()} VERSE BANNER`;
     setOpening(true);
     setTimeout(() => {
-      const result = openPack(save.pity,count);
+      const result = openPack(save.pity,count,pool);
       const owned = {...save.owned};
       result.results.forEach(c=>owned[c.id]=(owned[c.id]||0)+1);
       setSave(s=>({...s,gems:s.gems-cost,owned,pity:result.nextPity}));
       setPack(result.results);
+      setPackBanner(bannerLabel);
       setReveal([]);
       setBestReveal(false);
+      setShowBannerRoster(false);
       setOpening(false);
-    }, 450);
+    }, 300);
   };
   const revealAll = () => {
     if (!pack) return;
@@ -529,19 +616,30 @@ function Summon({save,setSave,notify}) {
   return (
     <main className="page">
       <div className="page-head">
-        <div><div className="eyebrow">SUMMON LAB</div><h1>Shonen Summoning</h1><p>Summon one fighter for 100 gems, or save 50 gems with a five-card summon for 450. Reveal every card before summoning again.</p></div>
+        <div><div className="eyebrow">SUMMON LAB</div><h1>Shonen Summoning</h1><p>Summon 1 for 100 gems, 5 for 450, or 10 for 900. Reveal your cards before summoning again.</p></div>
         <div className="big-gem">💎 {save.gems.toLocaleString()}</div>
+      </div>
+      <div className="banner-selector" role="tablist" aria-label="Summon banners">
+        <button role="tab" aria-selected={bannerMode==='all'} className={bannerMode==='all'?'banner-option active':'banner-option'} disabled={pending||opening} onClick={()=>{setBannerMode('all');setShowBannerRoster(false);}}>
+          <span className="eyebrow">PERMANENT BANNER</span><strong>ALL-UNIT BANNER</strong><small>Every character · {CHARACTERS.length} units</small>
+        </button>
+        <button role="tab" aria-selected={bannerMode==='verse'} className={bannerMode==='verse'?'banner-option verse-option active':'banner-option verse-option'} disabled={pending||opening} onClick={()=>{setBannerMode('verse');setShowBannerRoster(false);}}>
+          <span className="eyebrow">ROTATING BANNER</span><strong>{activeVerse.toUpperCase()}</strong><small>{bannerPool.length} units · changes in {remainingLabel}</small>
+        </button>
       </div>
       <div className="summon-layout">
         <section className="panel summon-stage">
-          <div className="summon-copy"><div className="eyebrow">CHOOSE YOUR SUMMON</div><h2>OPEN THE GATE.</h2><p>Duplicates are added to your collection. Higher rarity cards have lower drop rates.</p></div>
+          <div className="summon-copy"><div className="eyebrow">{bannerMode==='all'?'ALL-UNIT BANNER':`${activeVerse.toUpperCase()} VERSE BANNER`}</div><h2>OPEN THE GATE.</h2><p>{bannerMode==='all'?'Summon from the full roster of all anime verses.':'Summon only characters from the featured verse. This verse rotates every 45 minutes.'} Duplicates are kept, and higher rarities have lower base rates.</p></div>
           <div className="pack-visual"><div className="pack-glow"></div><div className="pack-mark">🎴</div><div className="pack-name">SHONEN<br/><b>SIEGE</b></div></div>
           <div className="summon-buttons">
             <button className="secondary" disabled={opening||pending} onClick={()=>open(1)}>{opening?'SUMMONING...':'SUMMON 1 — 💎 100'}</button>
-            <button className="primary pack-button" disabled={opening||pending} onClick={()=>open(5)}>{opening?'SUMMONING...':'SUMMON 5 — 💎 450'}</button>
+            <button className="secondary" disabled={opening||pending} onClick={()=>open(5)}>{opening?'SUMMONING...':'SUMMON 5 — 💎 450'}</button>
+            <button className="primary pack-button" disabled={opening||pending} onClick={()=>open(10)}>{opening?'SUMMONING...':'SUMMON 10 — 💎 900'}</button>
           </div>
+          <div className="banner-roster-actions"><button className="text-btn" onClick={()=>setShowBannerRoster(v=>!v)}>{showBannerRoster?'HIDE BANNER ROSTER':'VIEW CHARACTERS IN THIS BANNER'} ({bannerPool.length})</button></div>
+          {showBannerRoster && <div className="banner-roster"><div className="eyebrow">AVAILABLE CHARACTERS · {bannerMode==='all'?'ALL VERSES':activeVerse}</div><div className="banner-pool-grid">{bannerPool.map(c=><div key={c.id} className="banner-pool-card"><span style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><b>{c.name}</b><small>{c.anime}</small></div>)}</div></div>}
           <label className="skip-setting"><input type="checkbox" checked={skipBest} onChange={e=>{setSkipBest(e.target.checked);localStorage.setItem('shonen-siege-skip-best',String(e.target.checked));}}/> Skip featured best-card reveal</label>
-          {pack && <div className="reveal-wrap"><div className="reveal-head"><div><div className="eyebrow">LATEST SUMMON</div><small>{pending?'Reveal all cards to summon again.':'All cards revealed.'}</small></div><button className="text-btn" disabled={!pending} onClick={revealAll}>REVEAL ALL</button></div><div className="reveal-grid" style={{gridTemplateColumns:`repeat(${pack.length===1?1:5}, minmax(0,1fr))`}}>{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{characterImage(save,c.id)&&<img src={characterImage(save,c.id)} alt=""/>}</>:<b>?</b>}</button>)}</div></div>}
+          {pack && <div className="reveal-wrap"><div className="reveal-head"><div><div className="eyebrow">LATEST SUMMON · {packBanner}</div><small>{pending?'Reveal every card before summoning again.':'All cards revealed.'}</small></div><button className="text-btn" disabled={!pending} onClick={revealAll}>REVEAL ALL</button></div><div className="reveal-grid" style={{gridTemplateColumns:`repeat(${pack.length===1?1:5}, minmax(0,1fr))`}}>{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{characterImage(save,c.id)&&<img src={characterImage(save,c.id)} alt=""/>}</>:<b>?</b>}</button>)}</div></div>}
           {bestReveal && pack && <div className="best-reveal-backdrop"><section className="best-reveal-modal"><div className="eyebrow">HIGHLIGHT CARD</div><div className={`best-card-art ${pack[bestCard].rarity.toLowerCase()}`}>{characterImage(save,pack[bestCard].id)?<img src={characterImage(save,pack[bestCard].id)} alt=""/>:<strong>{getIcon(pack[bestCard])}</strong>}</div><span className="mini-rarity" style={{color:RARITY_COLOR[pack[bestCard].rarity]}}>{pack[bestCard].rarity}</span><h2>{pack[bestCard].name}</h2><p>{pack[bestCard].anime}</p><button className="primary" onClick={showRest}>SHOW THE REST</button></section></div>}
         </section>
         <aside className="panel pity-side"><div className="eyebrow">PITY TRACKER</div>
@@ -554,7 +652,7 @@ function Summon({save,setSave,notify}) {
   );
 }
 
-const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:40, enemies:[], units:[], gemsEarned:0, message:'', messageKind:'normal', nextCountdown:0};
+const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:100, enemies:[], units:[], gemsEarned:0, message:'', messageKind:'normal', nextCountdown:0};
 
 function Infinite({save,setSave,squad,setPage,notify}) {
   const [run,setRun] = useState(RUN_IDLE);
@@ -570,15 +668,15 @@ function Infinite({save,setSave,squad,setPage,notify}) {
 
   const startRun = (continueRun) => {
     const startWave = continueRun ? Math.max(1, save.waveBest + 1) : 1;
-    const startCash = Math.round(850 + Math.max(0,startWave-1)*32);
-    setRun({status:save.waveBest>0 || startWave>1?'warning':'warning', wave:startWave, cash:startCash, hp:40, enemies:[], units:[], gemsEarned:0, message:`WAVE ${startWave}${startWave%4===0?' • BOSS INCOMING':''}`, messageKind:startWave%4===0?'boss':'normal', nextCountdown:0});
+    const startCash = Math.round(GAME_BALANCE.startingCash + Math.max(0,startWave-1)*GAME_BALANCE.continueCashPerClearedWave);
+    setRun({status:save.waveBest>0 || startWave>1?'warning':'warning', wave:startWave, cash:startCash, hp:100, enemies:[], units:[], gemsEarned:0, message:`WAVE ${startWave}${startWave%GAME_BALANCE.bossEveryWaves===0?' • BOSS INCOMING':''}`, messageKind:startWave%GAME_BALANCE.bossEveryWaves===0?'boss':'normal', nextCountdown:0});
   };
 
   const beginWave = (wave) => {
-    const count = Math.min(45, 7 + Math.floor(wave*1.45));
+    const count = Math.min(50, GAME_BALANCE.earlyEnemyBaseCount + Math.floor(wave*GAME_BALANCE.enemiesPerWave));
     let counter = Date.now();
     const enemies = Array.from({length:count},(_,i)=>enemyFor(wave,i,count,`${wave}-${counter}-${i}`));
-    setRun(r=>({...r,status:'active',enemies, message:wave%4===0?`⚠️ BOSS INCOMING — ${enemies[enemies.length-1].name.toUpperCase()}`:`WAVE ${wave} STARTED`,messageKind:wave%4===0?'boss':'normal',nextCountdown:0}));
+    setRun(r=>({...r,status:'active',enemies, message:wave%GAME_BALANCE.bossEveryWaves===0?`⚠️ BOSS INCOMING — ${enemies[enemies.length-1].name.toUpperCase()}`:`WAVE ${wave} STARTED`,messageKind:wave%GAME_BALANCE.bossEveryWaves===0?'boss':'normal',nextCountdown:0}));
   };
 
   useEffect(() => {
@@ -593,7 +691,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
       setRun(r => {
         if (r.status !== 'cleared') return r;
         const next = r.wave + 1;
-        return {...r,status:'warning',wave:next,message:`NEXT WAVE ${next}${next%4===0?' • BOSS INCOMING':''}`,messageKind:next%4===0?'boss':'normal'};
+        return {...r,status:'warning',wave:next,message:`NEXT WAVE ${next}${next%GAME_BALANCE.bossEveryWaves===0?' • BOSS INCOMING':''}`,messageKind:next%GAME_BALANCE.bossEveryWaves===0?'boss':'normal'};
       });
     }, 2100);
     return ()=>clearTimeout(autoRef.current);
@@ -617,13 +715,16 @@ function Infinite({save,setSave,squad,setPage,notify}) {
         // Remove escaped enemies
         let remaining = [];
         for (const e of enemies) {
-          if (e.progress >= 1) hp -= e.damage;
-          else remaining.push(e);
+          if (e.progress >= 1) {
+            if (e.type === 'boss') hp = 0; // A boss reaching the core immediately ends the run.
+            else hp -= e.damage;            // Three normal leaks exceed the 100 HP core.
+          } else remaining.push(e);
         }
 
         // Units attack. Units never depend on nested React state updates.
         const units = current.units.map(u => ({...u, cooldown:Math.max(0,u.cooldown-dt*1000)}));
         for (const u of units) {
+          if (u.card.role === 'money') continue;
           if (u.cooldown > 0) continue;
           const upos = {x:u.x,y:u.y};
           const candidates = remaining.filter(e => {
@@ -632,7 +733,9 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           }).sort((a,b)=>b.progress-a.progress);
           const target = candidates[0];
           if (!target) continue;
-          let damage = u.damage;
+          const supportBonus = units.filter(support => support !== u && support.card.role === 'support' && distancePct(support.x,support.y,u.x,u.y) <= support.rangePct)
+            .reduce((sum,support) => sum + (support.card.buffPercent || 0.13), 0);
+          let damage = u.damage * (1 + Math.min(GAME_BALANCE.supportDamageBonusCap, supportBonus));
           const shieldHit = Math.min(target.shield, damage);
           target.shield -= shieldHit;
           damage -= shieldHit;
@@ -651,7 +754,10 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           const reward = gemReward(current.wave);
           const newBest = Math.max(save.waveBest,current.wave);
           setSave(s=>({...s,gems:s.gems+reward,waveBest:newBest}));
-          return {...current,status:'cleared',enemies:[],units,cash:cash+75+current.wave*5,gemsEarned:current.gemsEarned+reward,message:`WAVE ${current.wave} CLEARED • +💎 ${reward} • +💰 ${75+current.wave*5}`,messageKind:'clear'};
+          const waveStipend = GAME_BALANCE.waveCashBase + current.wave * GAME_BALANCE.waveCashPerWave;
+          const incomeBonus = units.reduce((sum,u)=>sum + unitIncome(u),0);
+          const cashRewardTotal = waveStipend + incomeBonus;
+          return {...current,status:'cleared',enemies:[],units,cash:cash+cashRewardTotal,gemsEarned:current.gemsEarned+reward,message:`WAVE ${current.wave} CLEARED • +💎 ${reward} • +💰 ${cashRewardTotal}`,messageKind:'clear'};
         }
         return {...current,hp:Math.max(0,hp),enemies:remaining,units,cash};
       });
@@ -686,10 +792,10 @@ function Infinite({save,setSave,squad,setPage,notify}) {
       card,
       level:1,
       x,y,
-      damage:card.baseDamage,
-      rangePct:Math.max(11,card.range/12),
-      attackSpeed:card.attackSpeed,
-      cooldown:120,
+      damage:card.role === 'money' ? 0 : card.baseDamage,
+      rangePct:card.role === 'money' ? 0 : Math.max(11,card.range/12),
+      attackSpeed:card.role === 'money' ? 0 : card.attackSpeed,
+      cooldown:card.role === 'money' ? 0 : 120,
     };
     setRun(r=>({...r,cash:r.cash-card.cost,units:[...r.units,unit]}));
     setPlacementMode(null);
@@ -703,7 +809,11 @@ function Infinite({save,setSave,squad,setPage,notify}) {
       if (u.level >= max) { notify(`${u.card.name} is maxed at Lv.${max}.`); return r; }
       const cost = Math.round((90 + u.level*55 + rarityRank(u.card.rarity)*25) * 1);
       if (r.cash < cost) { notify('Not enough cash for that upgrade.'); return r; }
-      return {...r,cash:r.cash-cost,units:r.units.map((x,i)=>i!==index?x:{...x,level:x.level+1,damage:Math.round(x.damage*1.30),rangePct:x.rangePct+0.9,attackSpeed:Math.max(220,x.attackSpeed-38)})};
+      return {...r,cash:r.cash-cost,units:r.units.map((x,i)=>{
+        if (i !== index) return x;
+        if (x.card.role === 'money') return {...x,level:x.level+1};
+        return {...x,level:x.level+1,damage:Math.round(x.damage*1.30),rangePct:x.rangePct+0.9,attackSpeed:Math.max(220,x.attackSpeed-38)};
+      })};
     });
   };
 
@@ -718,18 +828,18 @@ function Infinite({save,setSave,squad,setPage,notify}) {
   };
 
   const nextWave = () => {
-    if (run.status==='cleared') setRun(r=>({...r,status:'warning',wave:r.wave+1,message:`WAVE ${r.wave+1}${(r.wave+1)%4===0?' • BOSS INCOMING':''}`,messageKind:(r.wave+1)%4===0?'boss':'normal'}));
+    if (run.status==='cleared') setRun(r=>({...r,status:'warning',wave:r.wave+1,message:`WAVE ${r.wave+1}${(r.wave+1)%GAME_BALANCE.bossEveryWaves===0?' • BOSS INCOMING':''}`,messageKind:(r.wave+1)%GAME_BALANCE.bossEveryWaves===0?'boss':'normal'}));
     else notify('Finish the current wave first.');
   };
 
   const quit = () => {
     setPlacementMode(null);
-    setRun(r=>({...r,status:'idle',wave:0,cash:0,hp:40,enemies:[],units:[],message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'}));
+    setRun(r=>({...r,status:'idle',wave:0,cash:0,hp:100,enemies:[],units:[],message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'}));
   };
 
   const restart = () => {
     setPlacementMode(null);
-    setRun({status:'warning',wave:1,cash:850,hp:40,enemies:[],units:[],gemsEarned:0,message:'WAVE 1',messageKind:'normal',nextCountdown:0});
+    setRun({status:'warning',wave:1,cash:GAME_BALANCE.startingCash,hp:100,enemies:[],units:[],gemsEarned:0,message:'WAVE 1',messageKind:'normal',nextCountdown:0});
   };
 
   const continueRun = () => startRun(true);
@@ -766,11 +876,23 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           <div className="battle-info">
             <div><span>Wave</span><b>{run.wave || '—'}</b></div>
             <div><span>Cash</span><b>💰 {Math.floor(run.cash)}</b></div>
-            <div><span>Core</span><b className={run.hp<35?'danger-text':''}>❤ {Math.max(0,Math.ceil(run.hp))}/40</b></div>
+            <div><span>Core</span><b className={run.hp<35?'danger-text':''}>❤ {Math.max(0,Math.ceil(run.hp))}/100</b></div>
             <div><span>Enemies</span><b>{run.enemies.length}</b></div>
           </div>
 
           <div className={`map ${placementMode?'placing':''}`} onClick={place}>
+            <svg className="terrain-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="hillBack" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#42624c"/><stop offset="100%" stopColor="#263e35"/></linearGradient>
+                <linearGradient id="hillFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#314e3f"/><stop offset="100%" stopColor="#20382f"/></linearGradient>
+              </defs>
+              <path d="M0 0H100V19C90 23 85 11 76 14S62 28 52 22 36 9 25 16 10 27 0 20Z" fill="url(#hillBack)"/>
+              <path d="M0 100V82C10 78 14 69 24 75S39 91 51 82 66 70 77 79 92 93 100 84V100Z" fill="url(#hillFront)"/>
+              <path d="M0 28C9 22 14 24 20 30S31 41 42 31 57 21 64 29 76 41 88 31 96 29 100 32" fill="none" stroke="#708b66" strokeWidth="0.55" opacity="0.75"/>
+              <path d="M0 74C12 66 20 73 28 79S44 87 56 78 70 67 81 76 94 83 100 79" fill="none" stroke="#6b8b62" strokeWidth="0.7" opacity="0.7"/>
+              <g fill="#1c342b" opacity="0.72"><circle cx="8" cy="15" r="2.5"/><circle cx="12" cy="17" r="1.9"/><circle cx="29" cy="25" r="2.2"/><circle cx="34" cy="22" r="1.8"/><circle cx="68" cy="15" r="2.4"/><circle cx="72" cy="18" r="2"/><circle cx="92" cy="23" r="2.5"/><circle cx="18" cy="88" r="2.5"/><circle cx="23" cy="90" r="1.8"/><circle cx="60" cy="89" r="2.5"/><circle cx="65" cy="86" r="1.7"/><circle cx="87" cy="89" r="2.4"/></g>
+              <g fill="#a4b783" opacity="0.65"><circle cx="7" cy="13" r="0.6"/><circle cx="28" cy="23" r="0.6"/><circle cx="69" cy="13" r="0.7"/><circle cx="91" cy="21" r="0.6"/><circle cx="19" cy="86" r="0.6"/><circle cx="61" cy="87" r="0.6"/></g>
+            </svg>
             <svg className="road-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <polyline points={PATH.map(([x,y])=>`${x},${y}`).join(' ')} fill="none" stroke="rgba(0,0,0,.45)" strokeWidth="10" strokeLinejoin="round" strokeLinecap="round"/>
               <polyline points={PATH.map(([x,y])=>`${x},${y}`).join(' ')} fill="none" stroke="#50596b" strokeWidth="7" strokeLinejoin="round" strokeLinecap="round"/>
@@ -781,16 +903,16 @@ function Infinite({save,setSave,squad,setPage,notify}) {
             {run.enemies.map(e=>{
               const p=pathPosition(e.progress);
               return <div key={e.id} className={`enemy-token ${e.type}`} style={{left:`${p.x}%`,top:`${p.y}%`}}>
-                <div className="enemy-icon">{({boss:'B',fast:'F',tank:'T',regen:'R',shield:'S',armored:'A',normal:'N'})[e.type] || 'N'}</div>
+                <div className="enemy-icon" aria-label={`${e.type} enemy`}>{enemyImage(e.type) ? <img src={enemyImage(e.type)} alt=""/> : ({boss:'♛',fast:'↯',tank:'⬟',regen:'✚',shield:'⬡',armored:'▣',normal:'◆'})[e.type] || '◆'}</div>
                 <div className="enemy-health"><i style={{width:`${Math.max(0,(e.hp/e.maxHp)*100)}%`}}/></div>
                 {e.type==='boss' && <span className="boss-tag">{e.name}</span>}
               </div>
             })}
             {run.units.map((u,i)=><button key={`${u.card.id}-${i}`} className={`placed-unit ${selectedUnit===i?'selected':''}`} style={{left:`${u.x}%`,top:`${u.y}%`,borderColor:RARITY_COLOR[u.card.rarity]}} onClick={e=>{e.stopPropagation();setSelectedUnit(i);}} title={`${u.card.name} Lv.${u.level}`}> 
               {characterImage(save,u.card.id)?<img src={characterImage(save,u.card.id)} alt=""/>:<span>{getIcon(u.card)}</span>}
-              <small>Lv.{u.level}/{UPGRADE_LIMIT[u.card.rarity]}</small>
+              <small>{u.card.role==='money'?`Lv.${u.level} 💰`:`Lv.${u.level}/${UPGRADE_LIMIT[u.card.rarity]}`}</small>
             </button>)}
-            {selectedUnitData && <div className="range-ring" style={{left:`${selectedUnitData.x}%`,top:`${selectedUnitData.y}%`,width:`${selectedUnitData.rangePct*2}%`,height:`${selectedUnitData.rangePct*2}%`,borderColor:RARITY_COLOR[selectedUnitData.card.rarity]}}/>}
+            {selectedUnitData && selectedUnitData.card.role !== 'money' && <div className={`range-ring ${selectedUnitData.card.role==='support'?'support-range-ring':''}`} style={{left:`${selectedUnitData.x}%`,top:`${selectedUnitData.y}%`,width:`${selectedUnitData.rangePct*2}%`,height:`${selectedUnitData.rangePct*2}%`,borderColor:RARITY_COLOR[selectedUnitData.card.rarity]}}/>}
 
             {run.status==='warning' && <div className={`wave-banner ${run.messageKind==='boss'?'boss':''}`}>{run.message}</div>}
             {run.status==='active' && run.messageKind==='clear' && <div className="wave-banner clear">{run.message}</div>}
@@ -801,8 +923,12 @@ function Infinite({save,setSave,squad,setPage,notify}) {
 
           {selectedUnitData && <div className="selected-unit-panel">
             <div className="selected-unit-head"><div><div className="eyebrow">SELECTED UNIT</div><h3>{selectedUnitData.card.name}</h3><span>{selectedUnitData.card.rarity} • Level {selectedUnitData.level}/{UPGRADE_LIMIT[selectedUnitData.card.rarity]}</span></div><button className="text-btn" onClick={()=>setSelectedUnit(null)}>CLOSE</button></div>
+            <div className="unit-stat-preview">
+              {selectedUnitData.card.role === 'money' ? <div><span>INCOME ONLY</span><b>💰 {unitIncome(selectedUnitData)} / WAVE</b><small>No damage · no range · no attack speed</small></div> : <div><span>CURRENT</span><b>DMG {Math.round(selectedUnitData.damage)}</b><small>RANGE {selectedUnitData.rangePct.toFixed(1)} · SPA {(selectedUnitData.attackSpeed/1000).toFixed(2)}s</small></div>}
+              {selectedUnitData.level < UPGRADE_LIMIT[selectedUnitData.card.rarity] && (selectedUnitData.card.role === 'money' ? <div><span>NEXT UPGRADE</span><b>💰 {Math.round(unitIncome(selectedUnitData)*(1+GAME_BALANCE.incomeUpgradeMultiplier))} / WAVE</b><small>+{Math.round(GAME_BALANCE.incomeUpgradeMultiplier*100)}% income · +💰 {Math.round(unitIncome(selectedUnitData)*GAME_BALANCE.incomeUpgradeMultiplier)}</small></div> : <div><span>NEXT UPGRADE</span><b>DMG {Math.round(selectedUnitData.damage*1.30)} <i>+{Math.round(selectedUnitData.damage*.30)}</i></b><small>RANGE +0.9 · SPA −0.038s</small>{({2:selectedUnitData.card.abilities[0],4:selectedUnitData.card.abilities[1],6:selectedUnitData.card.abilities[2]})[selectedUnitData.level+1] && <em>Technique milestone: {({2:selectedUnitData.card.abilities[0],4:selectedUnitData.card.abilities[1],6:selectedUnitData.card.abilities[2]})[selectedUnitData.level+1]}</em>}</div>)}
+            </div>
             <div className="selected-actions">
-              <button className="primary" onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {Math.round(90 + selectedUnitData.level*55 + rarityRank(selectedUnitData.card.rarity)*25)}</button>
+              <button className="primary" disabled={selectedUnitData.level >= UPGRADE_LIMIT[selectedUnitData.card.rarity]} onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {Math.round(90 + selectedUnitData.level*55 + rarityRank(selectedUnitData.card.rarity)*25)}</button>
               <button className="danger" onClick={()=>{sellUnit(selectedUnit);setSelectedUnit(null);}}>SELL</button>
             </div>
           </div>}
@@ -817,7 +943,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
               const disabled=run.cash<c.cost||copies>=COPY_LIMIT[c.rarity]||run.units.length>=DEPLOY_LIMIT||!['active','warning','cleared'].includes(run.status);
               return <div className="deploy-card" key={c.id}>
                 <div className="deploy-avatar" style={{borderColor:RARITY_COLOR[c.rarity]}}>{available?<img src={available} alt=""/>:<span>{getIcon(c)}</span>}</div>
-                <div className="deploy-details"><b>{c.name}</b><small>{c.rarity} • {copies}/{COPY_LIMIT[c.rarity]} copies</small><span>Deploy 💰 {c.cost}</span></div>
+                <div className="deploy-details"><b>{c.name}</b><small>{c.rarity} • {copies}/{COPY_LIMIT[c.rarity]} copies{c.role==='money'?' • Income only':c.role==='support'?' • Support':''}</small><span>Deploy 💰 {c.cost}{c.role==='money'?` · +${c.incomePerWave}/wave`:c.role==='support'?` · +${Math.round((c.buffPercent||0.13)*100)}% aura`:''}</span></div>
                 <button disabled={disabled} className={placementMode===c.id?'placing-btn':''} onClick={()=>setPlacementMode(v=>v===c.id?null:c.id)}>{placementMode===c.id?'CLICK MAP':'PLACE'}</button>
               </div>
             })}
@@ -832,6 +958,8 @@ function Infinite({save,setSave,squad,setPage,notify}) {
     </main>
   );
 }
+
+
 
 // Mount the React app into index.html's #root element.
 createRoot(document.getElementById('root')).render(<App />);
