@@ -833,3 +833,5 @@ function Infinite({save,setSave,squad,setPage,notify}) {
   );
 }
 
+// Mount the React app into index.html's #root element.
+createRoot(document.getElementById('root')).render(<App />);
