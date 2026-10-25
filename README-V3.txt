@@ -1,40 +1,22 @@
-SHONEN SIEGE V3
-================
+SHONEN SIEGE V3.1 — GITHUB PAGES
 
-This is a standalone Vite/React prototype designed for GitHub Pages.
+Deploy workflow: .github/workflows/deploy.yml
+Repository pages base: /Shonen-SiegeV3/
 
-Main upgrades:
-- 5-card squad limit
-- 8 field placements max
-- rarity-based duplicate limits
-- rarity-based upgrade caps
-- separate permanent Gems and run-only Cash
-- 5-card packs with duplicate tracking and pity
-- duplicate card selling for Gems
-- full collection with search/filter
-- character image uploads saved in the browser
-- bigger winding map with real enemy pathing
-- ground enemies only
-- boss every 4 waves with rotating boss types
-- boss warning before the wave starts
-- wave clear rewards paid immediately in Gems
-- Gems stay with the player after losing or quitting
-- continue from best cleared wave + 1
-- restart from wave 1
-- auto next wave
-- faster game speed options
-- quit run
-- unit level display and rarity upgrade limits
-- local prototype Admin controls
+Main changes in this build:
+- Fixed unit placement to calculate clicks relative to the map element.
+- Prevents placing units directly on the road by measuring distance to road segments.
+- Speed settings cycle 1x, 1.5x, 2x.
+- Core durability reduced to 40, displayed as current/40.
+- Clearing a wave awards permanent gems and a small cash bonus (75 + 5 per wave).
+- Upgrade prices no longer increase just because the wave number increases.
+- Summon one card for 100 gems or five for 450 gems.
+- New summon cannot start until all previous cards are revealed.
+- Reveal All highlights the best card first; the skip option bypasses that presentation.
+- Collection can filter by anime verse and rarity.
+- Expanded roster to 45 characters.
+- Player-facing Admin page removed. Do not add client-side admin controls for a public multiplayer game.
+- Character stat balancing is in the CHARACTERS array in src/main.jsx: cost, baseDamage, range, attackSpeed.
+- Artwork can be added by putting image files in public/characters and adding entries to CHARACTER_ART near STARTERS in src/main.jsx, for example: { naruto: '/Shonen-SiegeV3/characters/naruto.webp' }.
 
-Deployment:
-1. Replace the files in your GitHub repository with the files in this folder.
-2. Commit to main.
-3. The included .github/workflows/deploy.yml builds and deploys automatically.
-4. Your GitHub Pages URL remains:
-   https://ashplay25xx1-cmd.github.io/Shonen_Siege/
-
-Notes:
-- Admin controls are local-only in this prototype.
-- Character artwork is stored in browser localStorage for development.
-- Real accounts, cloud saves, multiplayer, secure admin tools and server-side validation should be added before public competitive play.
+This is still a browser-local prototype. LocalStorage saves are tied to the browser/device. Secure accounts, cross-device saves, evolution, and multiplayer need a backend.
