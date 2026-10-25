@@ -17,7 +17,8 @@ const DEPLOY_LIMIT = 8;
 const SQUAD_LIMIT = 5;
 const COPY_LIMIT = { Common: 3, Uncommon: 3, Rare: 3, Epic: 2, Legendary: 2, Mythic: 1 };
 const UPGRADE_LIMIT = { Common: 3, Uncommon: 3, Rare: 5, Epic: 6, Legendary: 7, Mythic: 9 };
-const PACK_COST = 100;
+const SINGLE_COST = 100;
+const FIVE_COST = 450;
 const SLOT_RULES = {
   4: { wave: 10, gems: 250 },
   5: { wave: 25, gems: 500 },
@@ -38,8 +39,46 @@ const CHARACTERS = [
   {id:'asta', name:'Asta', anime:'Black Clover', rarity:'Epic', cost:340, baseDamage:45, range:105, attackSpeed:620, abilities:['Demon Slash','Black Form','Black Divider']},
   {id:'saitama', name:'Saitama', anime:'One Punch Man', rarity:'Mythic', cost:800, baseDamage:110, range:105, attackSpeed:1100, abilities:['Normal Punch','Serious Series','Serious Punch']},
   {id:'gon', name:'Gon Freecss', anime:'Hunter x Hunter', rarity:'Uncommon', cost:190, baseDamage:27, range:95, attackSpeed:600, abilities:['Rock','Scissors','Jajanken']},
+
+  {id:'sasuke', name:'Sasuke Uchiha', anime:'Naruto', rarity:'Epic', cost:380, baseDamage:44, range:120, attackSpeed:610, abilities:['Chidori','Amaterasu','Susanoo']},
+  {id:'kakashi', name:'Kakashi Hatake', anime:'Naruto', rarity:'Legendary', cost:470, baseDamage:50, range:135, attackSpeed:720, abilities:['Lightning Blade','Kamui','Copy Ninja']},
+  {id:'vegeta', name:'Vegeta', anime:'Dragon Ball', rarity:'Legendary', cost:490, baseDamage:53, range:125, attackSpeed:740, abilities:['Galick Gun','Final Flash','Ultra Ego']},
+  {id:'gohan', name:'Son Gohan', anime:'Dragon Ball', rarity:'Epic', cost:370, baseDamage:42, range:118, attackSpeed:620, abilities:['Masenko','Beast Rush','Special Beam']},
+  {id:'rukia', name:'Rukia Kuchiki', anime:'Bleach', rarity:'Rare', cost:260, baseDamage:32, range:130, attackSpeed:670, abilities:['Sode no Shirayuki','Frost Bloom','Hakka no Togame']},
+  {id:'byakuya', name:'Byakuya Kuchiki', anime:'Bleach', rarity:'Epic', cost:390, baseDamage:45, range:145, attackSpeed:760, abilities:['Senbonzakura','Bankai','Petal Storm']},
+  {id:'zoro', name:'Roronoa Zoro', anime:'One Piece', rarity:'Legendary', cost:460, baseDamage:52, range:105, attackSpeed:580, abilities:['Three Sword Style','Asura','King of Hell']},
+  {id:'sanji', name:'Sanji', anime:'One Piece', rarity:'Rare', cost:270, baseDamage:34, range:100, attackSpeed:430, abilities:['Diable Jambe','Sky Walk','Ifrit Jambe']},
+  {id:'nami', name:'Nami', anime:'One Piece', rarity:'Uncommon', cost:175, baseDamage:22, range:140, attackSpeed:650, abilities:['Clima-Tact','Thunderbolt','Zeus']},
+  {id:'megumi', name:'Megumi Fushiguro', anime:'Jujutsu Kaisen', rarity:'Rare', cost:275, baseDamage:33, range:125, attackSpeed:650, abilities:['Divine Dogs','Nue','Chimera Shadow']},
+  {id:'yuji', name:'Yuji Itadori', anime:'Jujutsu Kaisen', rarity:'Uncommon', cost:190, baseDamage:25, range:95, attackSpeed:500, abilities:['Divergent Fist','Black Flash','Cursed Energy']},
+  {id:'sukuna', name:'Ryomen Sukuna', anime:'Jujutsu Kaisen', rarity:'Mythic', cost:790, baseDamage:98, range:135, attackSpeed:900, abilities:['Dismantle','Cleave','Malevolent Shrine']},
+  {id:'power', name:'Power', anime:'Chainsaw Man', rarity:'Rare', cost:255, baseDamage:33, range:100, attackSpeed:540, abilities:['Blood Hammer','Blood Spear','Blood Fiend']},
+  {id:'makima', name:'Makima', anime:'Chainsaw Man', rarity:'Legendary', cost:520, baseDamage:55, range:155, attackSpeed:900, abilities:['Control','Crush','Contract']},
+  {id:'bakugo', name:'Katsuki Bakugo', anime:'My Hero Academia', rarity:'Epic', cost:365, baseDamage:42, range:125, attackSpeed:540, abilities:['AP Shot','Howitzer Impact','Cluster']},
+  {id:'todoroki', name:'Shoto Todoroki', anime:'My Hero Academia', rarity:'Rare', cost:285, baseDamage:35, range:145, attackSpeed:750, abilities:['Ice Wall','Flashfire','Phosphor']},
+  {id:'allmight', name:'All Might', anime:'My Hero Academia', rarity:'Legendary', cost:480, baseDamage:55, range:110, attackSpeed:780, abilities:['Detroit Smash','United States','Symbol of Peace']},
+  {id:'hisoka', name:'Hisoka', anime:'Hunter x Hunter', rarity:'Epic', cost:350, baseDamage:40, range:120, attackSpeed:600, abilities:['Bungee Gum','Texture Surprise','Trickster']},
+  {id:'kurapika', name:'Kurapika', anime:'Hunter x Hunter', rarity:'Rare', cost:280, baseDamage:34, range:125, attackSpeed:650, abilities:['Dowsing Chain','Judgment Chain','Emperor Time']},
+  {id:'zenitsu', name:'Zenitsu Agatsuma', anime:'Demon Slayer', rarity:'Rare', cost:265, baseDamage:35, range:95, attackSpeed:390, abilities:['Thunderclap','Sixfold','Godspeed']},
+  {id:'inosuke', name:'Inosuke Hashibira', anime:'Demon Slayer', rarity:'Uncommon', cost:185, baseDamage:26, range:95, attackSpeed:470, abilities:['Beast Breathing','Fang Rush','Spatial Awareness']},
+  {id:'rengoku', name:'Kyojuro Rengoku', anime:'Demon Slayer', rarity:'Legendary', cost:465, baseDamage:51, range:115, attackSpeed:600, abilities:['Flame Tiger','Purgatory','Flame Breathing']},
+  {id:'yami', name:'Yami Sukehiro', anime:'Black Clover', rarity:'Legendary', cost:475, baseDamage:54, range:120, attackSpeed:700, abilities:['Dark Cloaked','Dimension Slash','Death Thrust']},
+  {id:'yuno', name:'Yuno', anime:'Black Clover', rarity:'Epic', cost:375, baseDamage:43, range:150, attackSpeed:740, abilities:['Wind Blade','Spirit Dive','Star Magic']},
+  {id:'genos', name:'Genos', anime:'One Punch Man', rarity:'Epic', cost:355, baseDamage:41, range:150, attackSpeed:650, abilities:['Incinerate','Machine Gun Blows','Core Burst']},
+  {id:'garou', name:'Garou', anime:'One Punch Man', rarity:'Legendary', cost:495, baseDamage:56, range:105, attackSpeed:480, abilities:['Flowing Water','Monster Calamity','Cosmic Fist']},
+  {id:'yuuta', name:'Yuta Okkotsu', anime:'Jujutsu Kaisen', rarity:'Legendary', cost:485, baseDamage:50, range:130, attackSpeed:690, abilities:['Rika','Copy','True Mutual Love']},
+  {id:'shanks', name:'Shanks', anime:'One Piece', rarity:'Mythic', cost:760, baseDamage:92, range:130, attackSpeed:800, abilities:['Divine Departure','Conqueror Haki','Observation Kill']},
+  {id:'trunks', name:'Future Trunks', anime:'Dragon Ball', rarity:'Epic', cost:390, baseDamage:45, range:115, attackSpeed:570, abilities:['Burning Attack','Sword Slash','Final Hope']},
+  {id:'obito', name:'Obito Uchiha', anime:'Naruto', rarity:'Mythic', cost:770, baseDamage:94, range:140, attackSpeed:850, abilities:['Kamui','Fire Style','Ten Tails']},
+  {id:'kenpachi', name:'Kenpachi Zaraki', anime:'Bleach', rarity:'Legendary', cost:490, baseDamage:57, range:100, attackSpeed:720, abilities:['Nozarashi','Battle Instinct','Meteor Strike']},
+  {id:'chopper', name:'Tony Tony Chopper', anime:'One Piece', rarity:'Uncommon', cost:180, baseDamage:24, range:95, attackSpeed:520, abilities:['Guard Point','Heavy Point','Monster Point']},
+  {id:'shikamaru', name:'Shikamaru Nara', anime:'Naruto', rarity:'Rare', cost:250, baseDamage:30, range:155, attackSpeed:820, abilities:['Shadow Possession','Shadow Stitch','Shadow Strangle']},
 ];
 
+// BALANCING: adjust each character's baseDamage, range, attackSpeed and cost in CHARACTERS above.
+// ARTWORK: add files under public/characters and map character IDs to their relative URLs here.
+const CHARACTER_ART = {};
+const characterImage = (save, id) => save.cardImages?.[id] || CHARACTER_ART[id] || '';
 const STARTERS = ['naruto','deku','tanjiro'];
 
 function freshSave() {
@@ -89,17 +128,9 @@ function getChar(id) {
 
 function getIcon(char) {
   const map = {
-    'Dragon Ball':'☄️',
-    'Bleach':'⚔️',
-    'Naruto':'🌀',
-    'Jujutsu Kaisen':'◉',
-    'One Piece':'☠️',
-    'Chainsaw Man':'⛓️',
-    'My Hero Academia':'💥',
-    'Hunter x Hunter':'⚡',
-    'Demon Slayer':'🌊',
-    'Black Clover':'♣️',
-    'One Punch Man':'👊',
+    'Dragon Ball':'KI', 'Bleach':'魂', 'Naruto':'忍', 'Jujutsu Kaisen':'呪',
+    'One Piece':'海', 'Chainsaw Man':'刃', 'My Hero Academia':'PLUS',
+    'Hunter x Hunter':'H×H', 'Demon Slayer':'炎', 'Black Clover':'♣', 'One Punch Man':'拳',
   };
   return map[char.anime] || '✦';
 }
@@ -146,26 +177,10 @@ function enemyFor(wave, index, total, id) {
 }
 
 const PATH = [
-  [4, 17],
-  [16, 17],
-  [23, 29],
-  [23, 43],
-  [47, 43],
-  [55, 32],
-  [55, 20],
-  [82, 20],
-  [91, 30],
-  [91, 49],
-  [74, 49],
-  [67, 59],
-  [67, 74],
-  [26, 74],
-  [18, 64],
-  [18, 53],
-  [36, 53],
-  [44, 63],
-  [44, 87],
-  [92, 87],
+  [5, 12], [23, 12], [30, 18], [30, 30], [20, 36],
+  [12, 43], [12, 55], [22, 62], [40, 62], [48, 55],
+  [48, 43], [58, 36], [72, 36], [82, 44], [82, 58],
+  [70, 65], [58, 72], [58, 83], [72, 89], [92, 89],
 ];
 
 function pathPosition(progress) {
@@ -205,10 +220,10 @@ function rollRarity(pity) {
   return 'Common';
 }
 
-function openPack(pity) {
+function openPack(pity, count=5) {
   const nextPity = {...pity};
   const results = [];
-  for (let i=0;i<5;i++) {
+  for (let i=0;i<count;i++) {
     const rarity = rollRarity(nextPity);
     const pool = CHARACTERS.filter(c => c.rarity === rarity);
     results.push(pool[Math.floor(Math.random()*pool.length)] || CHARACTERS[0]);
@@ -270,7 +285,6 @@ function App() {
             ['collection','Collection','▦'],
             ['summon','Summon','✦'],
             ['infinite','Infinite','∞'],
-            ['admin','Admin','⚙'],
           ].map(([key,label,icon])=>
             <button key={key} onClick={()=>setPage(key)} className={page===key?'active':''}><span>{icon}</span>{label}</button>
           )}
@@ -282,7 +296,6 @@ function App() {
       {page==='collection' && <Collection save={save} squad={squad} toggleSquad={toggleSquad} setSave={setSave} notify={notify} />}
       {page==='summon' && <Summon save={save} setSave={setSave} notify={notify} />}
       {page==='infinite' && <Infinite save={save} setSave={setSave} squad={squad} setPage={setPage} notify={notify} />}
-      {page==='admin' && <Admin save={save} setSave={setSave} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -296,8 +309,8 @@ function Home({save,uniqueOwned,setPage}) {
       <section className="hero">
         <div className="hero-copy">
           <div className="eyebrow">COLLECT • BUILD • SURVIVE</div>
-          <h1>Build fewer.<br/><span>Build stronger.</span></h1>
-          <p>Shonen Siege is built around a simple idea: a smaller, stronger roster should carry you deeper into Infinite Mode.</p>
+          <h1>Choose your team.<br/><span>Push further.</span></h1>
+          <p>Build a squad that fits your strategy, strengthen your best fighters, and see how far you can survive in Infinite Mode.</p>
           <div className="hero-actions">
             <button className="primary" onClick={()=>setPage('infinite')}>PLAY INFINITE <span>→</span></button>
             <button className="secondary" onClick={()=>setPage('collection')}>OPEN COLLECTION</button>
@@ -354,13 +367,14 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
   const [filter,setFilter] = useState('All');
   const [query,setQuery] = useState('');
   const [sort,setSort] = useState('rarity');
+  const [verse,setVerse] = useState('All Verses');
   const filtered = useMemo(() => {
-    let list = CHARACTERS.filter(c => (filter==='All'||c.rarity===filter) && `${c.name} ${c.anime}`.toLowerCase().includes(query.toLowerCase()));
+    let list = CHARACTERS.filter(c => (filter==='All'||c.rarity===filter) && (verse==='All Verses'||c.anime===verse) && `${c.name} ${c.anime}`.toLowerCase().includes(query.toLowerCase()));
     if (sort==='rarity') list.sort((a,b)=>rarityRank(b.rarity)-rarityRank(a.rarity));
     if (sort==='owned') list.sort((a,b)=>(save.owned[b.id]||0)-(save.owned[a.id]||0));
     if (sort==='name') list.sort((a,b)=>a.name.localeCompare(b.name));
     return list;
-  },[filter,query,sort,save.owned]);
+  },[filter,query,sort,verse,save.owned]);
 
   const uploadImage = (id,file) => {
     if (!file) return;
@@ -406,7 +420,7 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
   return (
     <main className="page">
       <div className="page-head">
-        <div><div className="eyebrow">ROSTER ARCHIVE</div><h1>Collection</h1><p>See every fighter, track duplicates, add artwork and build a five-card squad.</p></div>
+        <div><div className="eyebrow">ROSTER ARCHIVE</div><h1>Collection</h1><p>Browse fighters by anime verse, track duplicates, and build a five-card squad.</p></div>
         <div className="squad-pill">Squad {squad.length}/{save.unlockedSlots}</div>
       </div>
 
@@ -414,6 +428,9 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
         <section className="panel">
           <div className="toolbar">
             <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search character or anime..." />
+            <select value={verse} onChange={e=>setVerse(e.target.value)}>
+              <option>All Verses</option>{[...new Set(CHARACTERS.map(c=>c.anime))].sort().map(v=><option key={v}>{v}</option>)}
+            </select>
             <select value={filter} onChange={e=>setFilter(e.target.value)}>
               <option>All</option>{RARITIES.map(r=><option key={r}>{r}</option>)}
             </select>
@@ -431,7 +448,7 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
               return (
                 <div className={`char-card ${c.rarity.toLowerCase()} ${isSelected?'selected':''} ${owned===0?'locked':''}`} key={c.id}>
                   <div className="char-art">
-                    {save.cardImages[c.id] ? <img src={save.cardImages[c.id]} alt={c.name}/> : <div className="char-placeholder"><span>{getIcon(c)}</span><small>{c.anime}</small></div>}
+                    {characterImage(save,c.id) ? <img src={characterImage(save,c.id)} alt={c.name}/> : <div className="char-placeholder"><span>{getIcon(c)}</span><small>{c.anime}</small></div>}
                     <div className="rarity-badge">{c.rarity}</div>
                     {owned===0 && <div className="locked-overlay">LOCKED</div>}
                   </div>
@@ -443,7 +460,7 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
                       <button className={isSelected?'selected-btn':''} disabled={owned===0} onClick={()=>toggleSquad(c.id)}>{isSelected?'REMOVE':'ADD TO SQUAD'}</button>
                       {owned>1 && <button className="sell-btn" onClick={()=>sellDuplicate(c.id)}>SELL DUPLICATE</button>}
                     </div>
-                    <label className="upload-btn">{save.cardImages[c.id]?'CHANGE IMAGE':'ADD CHARACTER IMAGE'}<input type="file" accept="image/*" onChange={e=>uploadImage(c.id,e.target.files?.[0])}/></label>
+
                   </div>
                 </div>
               );
@@ -462,7 +479,7 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
               const locked = i >= save.unlockedSlots;
               return <div className={`squad-row ${locked?'locked-row':''}`} key={i}>
                 <div className="slot-number">0{i+1}</div>
-                <div className="slot-avatar" style={{borderColor:c?RARITY_COLOR[c.rarity]:'#2b3040'}}>{locked?<span>🔒</span>:c&&save.cardImages[c.id]?<img src={save.cardImages[c.id]} alt=""/>:c?<span>{getIcon(c)}</span>:<span>+</span>}</div>
+                <div className="slot-avatar" style={{borderColor:c?RARITY_COLOR[c.rarity]:'#2b3040'}}>{locked?<span>🔒</span>:c&&characterImage(save,c.id)?<img src={characterImage(save,c.id)} alt=""/>:c?<span>{getIcon(c)}</span>:<span>+</span>}</div>
                 <div className="slot-text">{locked?<><b>Locked</b><small>Expand at wave {SLOT_RULES[i+1]?.wave||'—'}</small></>:c?<><b>{c.name}</b><small>{c.rarity} • max {COPY_LIMIT[c.rarity]} copies</small></>:<><b>Open slot</b><small>Choose a card</small></>}</div>
               </div>
             })}
@@ -482,38 +499,52 @@ function Summon({save,setSave,notify}) {
   const [pack,setPack] = useState(null);
   const [reveal,setReveal] = useState([]);
   const [opening,setOpening] = useState(false);
-
-  const open = () => {
-    if (opening) return;
-    if (save.gems < PACK_COST) return notify(`You need ${PACK_COST} gems.`);
+  const [bestReveal,setBestReveal] = useState(false);
+  const [skipBest,setSkipBest] = useState(()=>localStorage.getItem('shonen-siege-skip-best')==='true');
+  const pending = !!pack && reveal.length < pack.length;
+  const open = (count) => {
+    if (opening || pending) return;
+    const cost = count===1 ? SINGLE_COST : FIVE_COST;
+    if (save.gems < cost) return notify(`You need ${cost} gems.`);
     setOpening(true);
     setTimeout(() => {
-      const result = openPack(save.pity);
+      const result = openPack(save.pity,count);
       const owned = {...save.owned};
       result.results.forEach(c=>owned[c.id]=(owned[c.id]||0)+1);
-      setSave(s=>({...s,gems:s.gems-PACK_COST,owned,pity:result.nextPity}));
+      setSave(s=>({...s,gems:s.gems-cost,owned,pity:result.nextPity}));
       setPack(result.results);
       setReveal([]);
+      setBestReveal(false);
       setOpening(false);
-    }, 650);
+    }, 450);
   };
+  const revealAll = () => {
+    if (!pack) return;
+    if (skipBest) { setReveal(pack.map((_,i)=>i)); return; }
+    setBestReveal(true);
+  };
+  const showRest = () => { setReveal(pack.map((_,i)=>i)); setBestReveal(false); };
+  const bestCard = pack?.reduce((best,c,i)=>best===null||rarityRank(c.rarity)>rarityRank(pack[best].rarity)?i:best,null);
 
   return (
     <main className="page">
       <div className="page-head">
-        <div><div className="eyebrow">SUMMON LAB</div><h1>Shonen Pack</h1><p>Five cards per pack. Duplicates stay in your collection and can be traded back for gems.</p></div>
+        <div><div className="eyebrow">SUMMON LAB</div><h1>Shonen Summoning</h1><p>Summon one fighter for 100 gems, or save 50 gems with a five-card summon for 450. Reveal every card before summoning again.</p></div>
         <div className="big-gem">💎 {save.gems.toLocaleString()}</div>
       </div>
-
       <div className="summon-layout">
         <section className="panel summon-stage">
-          <div className="summon-copy"><div className="eyebrow">5 CARD CAPSULE</div><h2>OPEN THE GATE.</h2><p>Base rates are weighted by rarity. Pity counters are shared across packs and guarantee the next higher threshold.</p></div>
+          <div className="summon-copy"><div className="eyebrow">CHOOSE YOUR SUMMON</div><h2>OPEN THE GATE.</h2><p>Duplicates are added to your collection. Higher rarity cards have lower drop rates.</p></div>
           <div className="pack-visual"><div className="pack-glow"></div><div className="pack-mark">🎴</div><div className="pack-name">SHONEN<br/><b>SIEGE</b></div></div>
-          <button className="primary pack-button" disabled={opening} onClick={open}>{opening?'OPENING...':`OPEN PACK — 💎 ${PACK_COST}`}</button>
-          {pack && <div className="reveal-wrap"><div className="reveal-head"><div className="eyebrow">LATEST PACK</div><button className="text-btn" onClick={()=>setReveal([0,1,2,3,4])}>REVEAL ALL</button></div><div className="reveal-grid">{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{save.cardImages[c.id]&&<img src={save.cardImages[c.id]} alt=""/>}</>:<b>?</b>}</button>)}</div></div>}
+          <div className="summon-buttons">
+            <button className="secondary" disabled={opening||pending} onClick={()=>open(1)}>{opening?'SUMMONING...':'SUMMON 1 — 💎 100'}</button>
+            <button className="primary pack-button" disabled={opening||pending} onClick={()=>open(5)}>{opening?'SUMMONING...':'SUMMON 5 — 💎 450'}</button>
+          </div>
+          <label className="skip-setting"><input type="checkbox" checked={skipBest} onChange={e=>{setSkipBest(e.target.checked);localStorage.setItem('shonen-siege-skip-best',String(e.target.checked));}}/> Skip featured best-card reveal</label>
+          {pack && <div className="reveal-wrap"><div className="reveal-head"><div><div className="eyebrow">LATEST SUMMON</div><small>{pending?'Reveal all cards to summon again.':'All cards revealed.'}</small></div><button className="text-btn" disabled={!pending} onClick={revealAll}>REVEAL ALL</button></div><div className="reveal-grid" style={{gridTemplateColumns:`repeat(${pack.length===1?1:5}, minmax(0,1fr))`}}>{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{characterImage(save,c.id)&&<img src={characterImage(save,c.id)} alt=""/>}</>:<b>?</b>}</button>)}</div></div>}
+          {bestReveal && pack && <div className="best-reveal-backdrop"><section className="best-reveal-modal"><div className="eyebrow">HIGHLIGHT CARD</div><div className={`best-card-art ${pack[bestCard].rarity.toLowerCase()}`}>{characterImage(save,pack[bestCard].id)?<img src={characterImage(save,pack[bestCard].id)} alt=""/>:<strong>{getIcon(pack[bestCard])}</strong>}</div><span className="mini-rarity" style={{color:RARITY_COLOR[pack[bestCard].rarity]}}>{pack[bestCard].rarity}</span><h2>{pack[bestCard].name}</h2><p>{pack[bestCard].anime}</p><button className="primary" onClick={showRest}>SHOW THE REST</button></section></div>}
         </section>
-        <aside className="panel pity-side">
-          <div className="eyebrow">PITY TRACKER</div>
+        <aside className="panel pity-side"><div className="eyebrow">PITY TRACKER</div>
           {['Rare','Epic','Legendary','Mythic'].map(r=><div className="pity-row" key={r}><div><span style={{color:RARITY_COLOR[r]}}>{r}</span><b>{save.pity[r]}/{PITY[r]}</b></div><div className="progress"><i style={{width:`${Math.min(100,save.pity[r]/PITY[r]*100)}%`,background:RARITY_COLOR[r]}}/></div></div>)}
           <div className="drop-rate-box"><div className="eyebrow">BASE RATES</div>{RARITIES.map(r=><div className="drop-line" key={r}><span><i style={{background:RARITY_COLOR[r]}}></i>{r}</span><b>{BASE_DROP_RATES[r]}%</b></div>)}</div>
           <div className="rule-box"><b>Duplicate sell values</b><div>{RARITIES.map(r=><span key={r}>{r}: 💎 {[8,12,20,35,60,100][rarityRank(r)]}</span>)}</div></div>
@@ -523,12 +554,12 @@ function Summon({save,setSave,notify}) {
   );
 }
 
-const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:100, enemies:[], units:[], gemsEarned:0, message:'', messageKind:'normal', nextCountdown:0};
+const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:40, enemies:[], units:[], gemsEarned:0, message:'', messageKind:'normal', nextCountdown:0};
 
 function Infinite({save,setSave,squad,setPage,notify}) {
   const [run,setRun] = useState(RUN_IDLE);
   const [autoNext,setAutoNext] = useState(true);
-  const [speed,setSpeed] = useState(1.35);
+  const [speed,setSpeed] = useState(1);
   const [placementMode,setPlacementMode] = useState(null);
   const timerRef = useRef(null);
   const autoRef = useRef(null);
@@ -540,7 +571,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
   const startRun = (continueRun) => {
     const startWave = continueRun ? Math.max(1, save.waveBest + 1) : 1;
     const startCash = Math.round(850 + Math.max(0,startWave-1)*32);
-    setRun({status:save.waveBest>0 || startWave>1?'warning':'warning', wave:startWave, cash:startCash, hp:100, enemies:[], units:[], gemsEarned:0, message:`WAVE ${startWave}${startWave%4===0?' • BOSS INCOMING':''}`, messageKind:startWave%4===0?'boss':'normal', nextCountdown:0});
+    setRun({status:save.waveBest>0 || startWave>1?'warning':'warning', wave:startWave, cash:startCash, hp:40, enemies:[], units:[], gemsEarned:0, message:`WAVE ${startWave}${startWave%4===0?' • BOSS INCOMING':''}`, messageKind:startWave%4===0?'boss':'normal', nextCountdown:0});
   };
 
   const beginWave = (wave) => {
@@ -620,7 +651,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           const reward = gemReward(current.wave);
           const newBest = Math.max(save.waveBest,current.wave);
           setSave(s=>({...s,gems:s.gems+reward,waveBest:newBest}));
-          return {...current,status:'cleared',enemies:[],units,cash,gemsEarned:current.gemsEarned+reward,message:`WAVE ${current.wave} CLEARED • +💎 ${reward}`,messageKind:'clear'};
+          return {...current,status:'cleared',enemies:[],units,cash:cash+75+current.wave*5,gemsEarned:current.gemsEarned+reward,message:`WAVE ${current.wave} CLEARED • +💎 ${reward} • +💰 ${75+current.wave*5}`,messageKind:'clear'};
         }
         return {...current,hp:Math.max(0,hp),enemies:remaining,units,cash};
       });
@@ -637,10 +668,18 @@ function Infinite({save,setSave,squad,setPage,notify}) {
     if (run.units.length >= DEPLOY_LIMIT) return notify(`Placement limit reached: ${DEPLOY_LIMIT}.`);
     const same = run.units.filter(u=>u.card.id===card.id).length;
     if (same >= COPY_LIMIT[card.rarity]) return notify(`${card.name} can only have ${COPY_LIMIT[card.rarity]} copies on the field.`);
-    if (run.units.some(u=>distancePct(u.x,u.y,(event.offsetX/event.currentTarget.clientWidth)*100,(event.offsetY/event.currentTarget.clientHeight)*100)<6)) return notify('Too close to another unit.');
-    const x = Math.max(5,Math.min(95,event.offsetX/event.currentTarget.clientWidth*100));
-    const y = Math.max(6,Math.min(94,event.offsetY/event.currentTarget.clientHeight*100));
-    const pathDist = PATH.reduce((best,p)=>Math.min(best,distancePct(x,y,p[0],p[1])),Infinity);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const rawX = ((event.clientX - rect.left) / rect.width) * 100;
+    const rawY = ((event.clientY - rect.top) / rect.height) * 100;
+    const x = Math.max(5,Math.min(95,rawX));
+    const y = Math.max(6,Math.min(94,rawY));
+    if (run.units.some(u=>distancePct(x,y,u.x,u.y)<7)) return notify('Too close to another unit.');
+    // Measure distance to every road segment, not just its corners.
+    const pathDist = PATH.slice(0,-1).reduce((best,a,i)=>{
+      const b=PATH[i+1], dx=b[0]-a[0], dy=b[1]-a[1];
+      const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy)));
+      return Math.min(best,distancePct(x,y,a[0]+t*dx,a[1]+t*dy));
+    },Infinity);
     if (pathDist < 8) return notify('Place units beside the road, not on it.');
     if (run.cash < card.cost) return notify(`Need ${card.cost} cash to deploy ${card.name}.`);
     const unit = {
@@ -662,7 +701,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
       if (!u) return r;
       const max = UPGRADE_LIMIT[u.card.rarity];
       if (u.level >= max) { notify(`${u.card.name} is maxed at Lv.${max}.`); return r; }
-      const cost = Math.round((90 + u.level*55 + rarityRank(u.card.rarity)*25) * (1 + r.wave*0.018));
+      const cost = Math.round((90 + u.level*55 + rarityRank(u.card.rarity)*25) * 1);
       if (r.cash < cost) { notify('Not enough cash for that upgrade.'); return r; }
       return {...r,cash:r.cash-cost,units:r.units.map((x,i)=>i!==index?x:{...x,level:x.level+1,damage:Math.round(x.damage*1.30),rangePct:x.rangePct+0.9,attackSpeed:Math.max(220,x.attackSpeed-38)})};
     });
@@ -685,12 +724,12 @@ function Infinite({save,setSave,squad,setPage,notify}) {
 
   const quit = () => {
     setPlacementMode(null);
-    setRun(r=>({...r,status:'idle',wave:0,cash:0,hp:100,enemies:[],units:[],message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'}));
+    setRun(r=>({...r,status:'idle',wave:0,cash:0,hp:40,enemies:[],units:[],message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'}));
   };
 
   const restart = () => {
     setPlacementMode(null);
-    setRun({status:'warning',wave:1,cash:850,hp:100,enemies:[],units:[],gemsEarned:0,message:'WAVE 1',messageKind:'normal',nextCountdown:0});
+    setRun({status:'warning',wave:1,cash:850,hp:40,enemies:[],units:[],gemsEarned:0,message:'WAVE 1',messageKind:'normal',nextCountdown:0});
   };
 
   const continueRun = () => startRun(true);
@@ -714,7 +753,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
       <div className="run-controls">
         <div className="control-left">
           <button className={`toggle ${autoNext?'on':''}`} onClick={()=>setAutoNext(v=>!v)}>⏭ Auto Next Wave: {autoNext?'ON':'OFF'}</button>
-          <button className="toggle" onClick={()=>setSpeed(s=>s===1.35?1.75:s===1.75?2.25:1.35)}>⚡ Speed {speed}x</button>
+          <button className="toggle" onClick={()=>setSpeed(s=>s===1?1.5:s===1.5?2:1)}>⚡ Speed {speed}x</button>
           {run.status==='cleared' && !autoNext && <button className="primary small" onClick={nextWave}>NEXT WAVE</button>}
         </div>
         <div className="control-right">
@@ -727,7 +766,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           <div className="battle-info">
             <div><span>Wave</span><b>{run.wave || '—'}</b></div>
             <div><span>Cash</span><b>💰 {Math.floor(run.cash)}</b></div>
-            <div><span>Core</span><b className={run.hp<35?'danger-text':''}>❤ {Math.max(0,Math.ceil(run.hp))}%</b></div>
+            <div><span>Core</span><b className={run.hp<35?'danger-text':''}>❤ {Math.max(0,Math.ceil(run.hp))}/40</b></div>
             <div><span>Enemies</span><b>{run.enemies.length}</b></div>
           </div>
 
@@ -742,13 +781,13 @@ function Infinite({save,setSave,squad,setPage,notify}) {
             {run.enemies.map(e=>{
               const p=pathPosition(e.progress);
               return <div key={e.id} className={`enemy-token ${e.type}`} style={{left:`${p.x}%`,top:`${p.y}%`}}>
-                <div className="enemy-icon">{e.type==='boss'?'👹':e.type==='fast'?'🐺':e.type==='tank'?'🗿':e.type==='regen'?'🧟':e.type==='shield'?'🛡️':e.type==='armored'?'🛡️':'👾'}</div>
+                <div className="enemy-icon">{({boss:'B',fast:'F',tank:'T',regen:'R',shield:'S',armored:'A',normal:'N'})[e.type] || 'N'}</div>
                 <div className="enemy-health"><i style={{width:`${Math.max(0,(e.hp/e.maxHp)*100)}%`}}/></div>
                 {e.type==='boss' && <span className="boss-tag">{e.name}</span>}
               </div>
             })}
             {run.units.map((u,i)=><button key={`${u.card.id}-${i}`} className={`placed-unit ${selectedUnit===i?'selected':''}`} style={{left:`${u.x}%`,top:`${u.y}%`,borderColor:RARITY_COLOR[u.card.rarity]}} onClick={e=>{e.stopPropagation();setSelectedUnit(i);}} title={`${u.card.name} Lv.${u.level}`}> 
-              {save.cardImages[u.card.id]?<img src={save.cardImages[u.card.id]} alt=""/>:<span>{getIcon(u.card)}</span>}
+              {characterImage(save,u.card.id)?<img src={characterImage(save,u.card.id)} alt=""/>:<span>{getIcon(u.card)}</span>}
               <small>Lv.{u.level}/{UPGRADE_LIMIT[u.card.rarity]}</small>
             </button>)}
             {selectedUnitData && <div className="range-ring" style={{left:`${selectedUnitData.x}%`,top:`${selectedUnitData.y}%`,width:`${selectedUnitData.rangePct*2}%`,height:`${selectedUnitData.rangePct*2}%`,borderColor:RARITY_COLOR[selectedUnitData.card.rarity]}}/>}
@@ -763,7 +802,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           {selectedUnitData && <div className="selected-unit-panel">
             <div className="selected-unit-head"><div><div className="eyebrow">SELECTED UNIT</div><h3>{selectedUnitData.card.name}</h3><span>{selectedUnitData.card.rarity} • Level {selectedUnitData.level}/{UPGRADE_LIMIT[selectedUnitData.card.rarity]}</span></div><button className="text-btn" onClick={()=>setSelectedUnit(null)}>CLOSE</button></div>
             <div className="selected-actions">
-              <button className="primary" onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {Math.round((90 + selectedUnitData.level*55 + rarityRank(selectedUnitData.card.rarity)*25)*(1 + run.wave*0.018))}</button>
+              <button className="primary" onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {Math.round(90 + selectedUnitData.level*55 + rarityRank(selectedUnitData.card.rarity)*25)}</button>
               <button className="danger" onClick={()=>{sellUnit(selectedUnit);setSelectedUnit(null);}}>SELL</button>
             </div>
           </div>}
@@ -774,7 +813,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
           <div className="deploy-list">
             {activeSquad.map(c=>{
               const copies=run.units.filter(u=>u.card.id===c.id).length;
-              const available=save.cardImages[c.id];
+              const available=characterImage(save,c.id);
               const disabled=run.cash<c.cost||copies>=COPY_LIMIT[c.rarity]||run.units.length>=DEPLOY_LIMIT||!['active','warning','cleared'].includes(run.status);
               return <div className="deploy-card" key={c.id}>
                 <div className="deploy-avatar" style={{borderColor:RARITY_COLOR[c.rarity]}}>{available?<img src={available} alt=""/>:<span>{getIcon(c)}</span>}</div>
@@ -794,50 +833,3 @@ function Infinite({save,setSave,squad,setPage,notify}) {
   );
 }
 
-function Admin({save,setSave,notify}) {
-  const [gemAmount,setGemAmount] = useState('1000');
-  const [cardId,setCardId] = useState(CHARACTERS[0].id);
-  const [copies,setCopies] = useState('1');
-
-  const add = () => {
-    const n=Math.max(0,Number(gemAmount)||0);
-    setSave(s=>({...s,gems:s.gems+n}));
-    notify(`Added ${n} gems.`);
-  };
-  const give = () => {
-    const n=Math.max(1,Number(copies)||1);
-    setSave(s=>({...s,owned:{...s.owned,[cardId]:(s.owned[cardId]||0)+n}}));
-    notify(`Added ${n} ${getChar(cardId).name} card(s).`);
-  };
-  const setBest = () => {
-    const w=Math.max(0,Math.floor(Number(document.getElementById('admin-best-wave')?.value || 0)));
-    setSave(s=>({...s,waveBest:w}));
-    notify(`Best cleared wave set to ${w}.`);
-  };
-  const reset = () => {
-    if (!window.confirm('Reset the local prototype save? This clears gems, cards, progress and images on this browser.')) return;
-    setSave(freshSave());
-    localStorage.removeItem('shonen-siege-v3-squad');
-    notify('Local save reset.');
-  };
-  const unlockAll = () => {
-    setSave(s=>({...s,unlockedSlots:5}));
-    notify('All 5 squad slots unlocked.');
-  };
-
-  return <main className="page">
-    <div className="page-head"><div><div className="eyebrow">LOCAL PROTOTYPE</div><h1>Admin Control</h1><p>These controls live in this browser only. They are for development, testing and balancing.</p></div><span className="admin-badge">⚠️ Prototype admin</span></div>
-    <div className="admin-grid">
-      <section className="panel admin-panel"><h2>Economy</h2><label>Give gems<input value={gemAmount} onChange={e=>setGemAmount(e.target.value)}/></label><button className="primary" onClick={add}>ADD GEMS</button><div className="admin-stat">Current: 💎 {save.gems.toLocaleString()}</div></section>
-      <section className="panel admin-panel"><h2>Cards</h2><label>Character<select value={cardId} onChange={e=>setCardId(e.target.value)}>{CHARACTERS.map(c=><option value={c.id} key={c.id}>{c.name} — {c.rarity}</option>)}</select></label><label>Copies<input value={copies} onChange={e=>setCopies(e.target.value)}/></label><button className="primary" onClick={give}>GIVE CARD(S)</button></section>
-      <section className="panel admin-panel"><h2>Progress</h2><label>Set best cleared wave<input id="admin-best-wave" type="number" min="0" defaultValue={save.waveBest}/></label><button className="secondary" onClick={setBest}>SET BEST WAVE</button><button className="secondary" onClick={unlockAll}>UNLOCK ALL 5 SLOTS</button><button className="danger" onClick={reset}>RESET LOCAL SAVE</button></section>
-    </div>
-    <section className="panel admin-panel image-admin"><h2>Character artwork</h2><p className="muted">Add or replace art for any character. Images are resized in the browser before saving.</p><div className="admin-art-grid">{CHARACTERS.map(c=><div className="admin-art-card" key={c.id}><div className="admin-art-preview">{save.cardImages[c.id]?<img src={save.cardImages[c.id]} alt=""/>:<span>{getIcon(c)}</span>}</div><b>{c.name}</b><label className="upload-btn">UPLOAD IMAGE<input type="file" accept="image/*" onChange={e=>{
-      const file=e.target.files?.[0]; if(!file)return;
-      const reader=new FileReader(); reader.onload=()=>{const img=new Image();img.onload=()=>{const max=512;const scale=Math.min(1,max/Math.max(img.width,img.height));const can=document.createElement('canvas');can.width=Math.max(1,Math.round(img.width*scale));can.height=Math.max(1,Math.round(img.height*scale));can.getContext('2d').drawImage(img,0,0,can.width,can.height);setSave(s=>({...s,cardImages:{...s.cardImages,[c.id]:can.toDataURL('image/webp',.78)}}));notify('Artwork saved.');};img.src=String(reader.result)};reader.readAsDataURL(file);
-    }}/></label></div>)}</div></section>
-    <div className="admin-note">For the future online version, move admin controls to a real authenticated server with roles and audit logs. This prototype intentionally keeps them local.</div>
-  </main>;
-}
-
-createRoot(document.getElementById('root')).render(<App />);
