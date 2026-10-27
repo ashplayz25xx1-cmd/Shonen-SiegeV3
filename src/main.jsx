@@ -1,7 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { GAME_BALANCE, ENEMY_BALANCE, CHARACTER_OVERRIDES, CHARACTER_ART, ENEMY_ART, ROSTER_ADDITIONS } from './game-config.js';
+import { GAME_BALANCE as BASE_GAME_BALANCE, ENEMY_BALANCE as BASE_ENEMY_BALANCE, CHARACTER_OVERRIDES as BASE_CHARACTER_OVERRIDES, CHARACTER_ART as BASE_CHARACTER_ART, ENEMY_ART as BASE_ENEMY_ART, ROSTER_ADDITIONS } from './game-config.js';
+import { AccountPage, AdminPage } from './account-admin.jsx';
+import { isBackendConfigured, restoreSession, getProfile, rpc, fetchPublicConfig, signOut } from './backend.js';
+
+let GAME_BALANCE = { ...BASE_GAME_BALANCE, rarityDefaults: { ...BASE_GAME_BALANCE.rarityDefaults } };
+let ENEMY_BALANCE = JSON.parse(JSON.stringify(BASE_ENEMY_BALANCE));
+let CHARACTER_ART = { ...BASE_CHARACTER_ART };
+let ENEMY_ART = { ...BASE_ENEMY_ART };
+let REMOTE_CHARACTER_ART = {};
+let REMOTE_ENEMY_ART = {};
+
 
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
 
@@ -92,13 +102,20 @@ function buildRosterCharacter(entry, index) {
   };
 }
 
-const CHARACTERS = [...CORE_CHARACTERS, ...ROSTER_ADDITIONS.map(buildRosterCharacter)]
-  .map(character => ({ ...character, ...(CHARACTER_OVERRIDES[character.id] || {}) }));
+const DEFAULT_CHARACTERS = [...CORE_CHARACTERS, ...ROSTER_ADDITIONS.map(buildRosterCharacter)]
+  .map(character => ({ ...character, ...(BASE_CHARACTER_OVERRIDES[character.id] || {}) }));
+let CHARACTERS = DEFAULT_CHARACTERS.slice();
 
 // Image paths are stored in src/game-config.js as paths relative to public/.
 const publicAsset = (path) => `${import.meta.env.BASE_URL}${String(path || '').replace(/^\/+/, '')}`;
-const characterImage = (save, id) => save.cardImages?.[id] || (CHARACTER_ART[id] ? publicAsset(CHARACTER_ART[id]) : '');
-const enemyImage = (type) => ENEMY_ART[type] ? publicAsset(ENEMY_ART[type]) : '';
+const characterImage = (save, id) => REMOTE_CHARACTER_ART[id] || save.cardImages?.[id] || (CHARACTER_ART[id] ? (String(CHARACTER_ART[id]).startsWith('http') ? CHARACTER_ART[id] : publicAsset(CHARACTER_ART[id])) : '');
+const enemyImage = (type, name='') => {
+  const bossId = type === 'boss' && name ? `boss-${String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}` : '';
+  const remote = (bossId && REMOTE_ENEMY_ART[bossId]) || REMOTE_ENEMY_ART[type];
+  if (remote) return remote;
+  const path = ENEMY_ART[type];
+  return path ? (String(path).startsWith('http') ? path : publicAsset(path)) : '';
+};
 const unitIncome = (unit) => unit?.card?.role === 'money'
   ? Math.round((unit.card.incomePerWave || 0) * (1 + Math.max(0, (unit.level || 1) - 1) * GAME_BALANCE.incomeUpgradeMultiplier))
   : 0;
@@ -187,7 +204,8 @@ function enemyFor(wave, index, total, id) {
   else if (wave >= 14 && roll < 6) type = 'regen';
   else if (wave >= 18 && roll < 8) type = 'shield';
   else if (wave >= 22 && roll < 10) type = 'armored';
-  const st = ENEMY_BALANCE[type] || ENEMY_BALANCE.normal;
+  let st = ENEMY_BALANCE[type] || ENEMY_BALANCE.normal;
+  if (st?.enabled === false) { type = 'normal'; st = ENEMY_BALANCE.normal; }
   const hp = Math.round(st.hp * (1 + wave * GAME_BALANCE.enemyHealthPerWave) * (1 + Math.max(0, index-total*0.5) * 0.01));
   return {id, type, name:type, progress:-0.035*(index+1), hp, maxHp:hp, speed:st.speed*(1+wave*0.01), damage:st.damage, armor:st.armor, shield:st.shield + (type==='shield' ? wave*2 : 0), regen:st.regen, reward:cashReward(wave,type)};
 }
@@ -288,8 +306,76 @@ function getRotatingVerse(now, verses) {
   return verses[index];
 }
 
+function mapDbCharacter(row, base = {}) {
+  return {
+    ...base,
+    id: row.id,
+    name: row.name || base.name || row.id,
+    anime: row.anime || base.anime || 'Unknown',
+    rarity: row.rarity || base.rarity || 'Common',
+    cost: Number(row.cost ?? base.cost ?? 180),
+    baseDamage: Number(row.base_damage ?? base.baseDamage ?? 22),
+    range: Number(row.range ?? base.range ?? 110),
+    attackSpeed: Number(row.attack_speed ?? base.attackSpeed ?? 680),
+    role: row.role || base.role || 'attack',
+    incomePerWave: Number(row.income_per_wave ?? base.incomePerWave ?? 0),
+    buffPercent: Number(row.buff_percent ?? base.buffPercent ?? 0),
+    abilities: Array.isArray(row.abilities) ? row.abilities : (base.abilities || []),
+    enabled: row.enabled !== false,
+  };
+}
+
+function applyRemoteConfig({characters=[], enemies=[], settings=[]}) {
+  if (Array.isArray(settings)) {
+    const row = settings.find(s => s.key === 'game_balance');
+    if (row?.value && typeof row.value === 'object') {
+      GAME_BALANCE = { ...GAME_BALANCE, ...row.value, rarityDefaults: { ...GAME_BALANCE.rarityDefaults, ...(row.value.rarityDefaults || {}) } };
+    }
+  }
+  if (Array.isArray(characters) && characters.length) {
+    const map = new Map(characters.map(c => [c.id, c]));
+    const baseIds = new Set(DEFAULT_CHARACTERS.map(c => c.id));
+    const merged = DEFAULT_CHARACTERS.filter(c => !map.has(c.id) || map.get(c.id).enabled !== false).map(c => map.has(c.id) ? mapDbCharacter(map.get(c.id), c) : c);
+    characters.filter(c => !baseIds.has(c.id) && c.enabled !== false).forEach(c => merged.push(mapDbCharacter(c)));
+    CHARACTERS = merged.length ? merged : DEFAULT_CHARACTERS.slice();
+    REMOTE_CHARACTER_ART = Object.fromEntries(characters.filter(c => c.art_url).map(c => [c.id,c.art_url]));
+  }
+  if (Array.isArray(enemies) && enemies.length) {
+    const next = JSON.parse(JSON.stringify(ENEMY_BALANCE));
+    const art = {};
+    for (const row of enemies) {
+      if (row.art_url) art[row.id] = row.art_url;
+      if (row.id.startsWith('boss-')) {
+        const name = row.name || row.id.replace(/^boss-/,'');
+        const idx = (next.bosses || []).findIndex(x => x.name.toLowerCase() === name.toLowerCase());
+        if (row.enabled === false) { if (idx >= 0) next.bosses.splice(idx, 1); continue; }
+        const b = { name, hp:Number(row.hp||0), hpPerWave:Number(row.hp_per_wave||0), speed:Number(row.speed||0), damage:Number(row.base_damage||100), armor:Number(row.armor||0), shield:Number(row.shield||0), regen:Number(row.regen||0) };
+        if (idx >= 0) next.bosses[idx] = b; else next.bosses.push(b);
+      } else {
+        next[row.id] = { ...(next[row.id] || {}), hp:Number(row.hp||0), speed:Number(row.speed||0), damage:Number(row.base_damage||0), armor:Number(row.armor||0), shield:Number(row.shield||0), regen:Number(row.regen||0), enabled: row.enabled !== false };
+      }
+    }
+    if (!next.bosses || !next.bosses.length) next.bosses = JSON.parse(JSON.stringify(BASE_ENEMY_BALANCE.bosses));
+    ENEMY_BALANCE = next;
+    REMOTE_ENEMY_ART = art;
+  }
+}
+
+async function loadPublishedConfig() {
+  if (!isBackendConfigured()) return false;
+  const remote = await fetchPublicConfig();
+  if ((remote.characters || []).length || (remote.enemies || []).length || (remote.settings || []).length) {
+    applyRemoteConfig(remote);
+    return true;
+  }
+  return false;
+}
+
 function App() {
   const [save, setSave] = useState(loadSave);
+  const [localSaveBackup] = useState(() => { try { const rawSaved=localStorage.getItem('shonen-siege-v3-local-backup'); const raw=localStorage.getItem('shonen-siege-v3'); const base=rawSaved ? normalizeSave(JSON.parse(rawSaved)) : (raw ? normalizeSave(JSON.parse(raw)) : loadSave()); const localSquad=JSON.parse(localStorage.getItem('shonen-siege-v3-squad')||'null'); const snapshot={...base,squad:Array.isArray(base.squad)?base.squad:(Array.isArray(localSquad)?localSquad.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT):STARTERS)}; if(!rawSaved) localStorage.setItem('shonen-siege-v3-local-backup',JSON.stringify(snapshot)); return snapshot; } catch { return {...loadSave(),squad:STARTERS}; } });
+  const [localSquadBackup] = useState(() => { try { const raw=JSON.parse(localStorage.getItem('shonen-siege-v3-squad')||'null'); return Array.isArray(raw)?raw.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT):STARTERS; } catch { return STARTERS; } });
+  const [saveImported, setSaveImported] = useState(false);
   const [page, setPage] = useState('home');
   const [squad, setSquad] = useState(() => {
     try {
@@ -299,9 +385,36 @@ function App() {
     return STARTERS;
   });
   const [toast, setToast] = useState('');
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [configRevision, setConfigRevision] = useState(0);
 
   useEffect(() => { localStorage.setItem('shonen-siege-v3', JSON.stringify(save)); }, [save]);
   useEffect(() => { localStorage.setItem('shonen-siege-v3-squad', JSON.stringify(squad)); }, [squad]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const changed = await loadPublishedConfig();
+        if (alive && changed) setConfigRevision(v => v + 1);
+      } catch (e) { console.warn('Published config could not be loaded:', e); }
+      try {
+        const restored = await restoreSession();
+        if (restored) {
+          const p = await getProfile(restored);
+          const cloudSave = await rpc(restored, 'get_my_save', {});
+          if (alive) {
+            setSession(restored); setProfile(p); setSaveImported(Boolean(cloudSave?.saveImported));
+            if (cloudSave) { setSave(normalizeSave(cloudSave)); if (Array.isArray(cloudSave.squad) && cloudSave.squad.length) setSquad(cloudSave.squad.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT)); }
+          }
+        }
+      } catch (e) { console.warn('Account session could not be restored:', e); }
+      finally { if (alive) setAccountLoading(false); }
+    })();
+    if (!isBackendConfigured()) setAccountLoading(false);
+    return () => { alive = false; };
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(()=>setToast(''), 2600);
@@ -312,38 +425,80 @@ function App() {
   const addGems = (amount) => setSave(s => ({...s, gems: Math.max(0, s.gems + amount)}));
   const uniqueOwned = CHARACTERS.filter(c => (save.owned[c.id] || 0) > 0).length;
 
-  const toggleSquad = (id) => {
+  const toggleSquad = async (id) => {
     if ((save.owned[id] || 0) < 1) return notify('You do not own that card yet.');
+    let next;
     if (squad.includes(id)) {
       if (squad.length <= 1) return notify('Keep at least one fighter in your squad.');
-      setSquad(squad.filter(x=>x!==id));
+      next = squad.filter(x=>x!==id);
+    } else {
+      if (squad.length >= SQUAD_LIMIT) return notify('Squad limit is 5 different cards.');
+      next = [...squad,id];
+    }
+    if (session) {
+      try { await rpc(session,'save_squad',{p_squad:next}); }
+      catch(e) { return notify(`Could not save cloud squad: ${e.message}`); }
+    }
+    setSquad(next);
+  };
+
+  const onAuthenticated = async (newSession) => {
+    const p = await getProfile(newSession);
+    const cloudSave = await rpc(newSession,'get_my_save',{});
+    setSession(newSession); setProfile(p); setSaveImported(Boolean(cloudSave?.saveImported));
+    if (cloudSave) {
+      setSave(normalizeSave(cloudSave));
+      if (Array.isArray(cloudSave.squad) && cloudSave.squad.length) setSquad(cloudSave.squad.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT));
+    }
+    notify('Account connected.');
+  };
+  const onSignedOut = async () => {
+    try { await signOut(session); } catch (e) { console.warn(e); }
+    setSession(null); setProfile(null); setSaveImported(false); setSave(localSaveBackup); setSquad(localSquadBackup);
+    setPage('home'); notify('Signed out.');
+  };
+  const onConfigChanged = async () => { const changed=await loadPublishedConfig(); if (changed) setConfigRevision(v=>v+1); };
+  const onSaveUpdated = cloudSave => { if (cloudSave) { setSave(normalizeSave(cloudSave)); setSaveImported(Boolean(cloudSave.saveImported)); } };
+  const navigateToPage = (nextPage) => {
+    if (nextPage === 'admin' && (!session?.access_token || profile?.role !== 'admin')) {
+      setPage('account');
+      notify(session?.access_token ? 'Admin access is restricted to the owner/admin account.' : 'Sign in with the owner/admin account to access Admin.');
       return;
     }
-    if (squad.length >= SQUAD_LIMIT) return notify('Squad limit is 5 different cards.');
-    setSquad([...squad,id]);
+    setPage(nextPage);
   };
+
+  // Protected-route guard: Admin never renders for signed-out or non-admin profiles,
+  // even if another component attempts to navigate to that view.
+  useEffect(() => {
+    if (page === 'admin' && (!session?.access_token || profile?.role !== 'admin')) setPage('account');
+  }, [page, session?.access_token, profile?.role]);
 
   return (
     <div className="app">
       <header className="topbar">
-        <button className="brand" onClick={()=>setPage('home')}><span className="brand-mark">⚔</span><span>SHONEN <b>SIEGE</b></span></button>
+        <button className="brand" onClick={()=>navigateToPage('home')}><span className="brand-mark">⚔</span><span>SHONEN <b>SIEGE</b></span></button>
         <nav>
           {[
             ['home','Home','⌂'],
             ['collection','Collection','▦'],
             ['summon','Summon','✦'],
             ['infinite','Infinite','∞'],
+            ['account','Account','◉'],
+            ...(profile?.role==='admin' ? [['admin','Admin','⚙']] : []),
           ].map(([key,label,icon])=>
-            <button key={key} onClick={()=>setPage(key)} className={page===key?'active':''}><span>{icon}</span>{label}</button>
+            <button key={key} onClick={()=>navigateToPage(key)} className={page===key?'active':''}><span>{icon}</span>{label}</button>
           )}
         </nav>
         <div className="wallet"><span>💎</span>{save.gems.toLocaleString()}</div>
       </header>
 
-      {page==='home' && <Home save={save} uniqueOwned={uniqueOwned} setPage={setPage} />}
-      {page==='collection' && <Collection save={save} squad={squad} toggleSquad={toggleSquad} setSave={setSave} notify={notify} />}
-      {page==='summon' && <Summon save={save} setSave={setSave} notify={notify} />}
-      {page==='infinite' && <Infinite save={save} setSave={setSave} squad={squad} setPage={setPage} notify={notify} />}
+      {page==='home' && <Home key={`home-${configRevision}`} save={save} uniqueOwned={uniqueOwned} setPage={setPage} />}
+      {page==='collection' && <Collection key={`collection-${configRevision}`} save={save} squad={squad} toggleSquad={toggleSquad} setSave={setSave} notify={notify} session={session} />}
+      {page==='summon' && <Summon key={`summon-${configRevision}`} save={save} setSave={setSave} notify={notify} session={session} />}
+      {page==='infinite' && <Infinite key={`infinite-${configRevision}`} save={save} setSave={setSave} squad={squad} setPage={setPage} notify={notify} session={session} />}
+      {page==='account' && <AccountPage session={session} profile={profile} accountLoading={accountLoading} currentSave={save} localSaveBackup={localSaveBackup} saveImported={saveImported} onAuthenticated={onAuthenticated} onSignedOut={onSignedOut} onSaveUpdated={onSaveUpdated} />}
+      {page==='admin' && session?.access_token && profile?.role==='admin' && <AdminPage session={session} profile={profile} characters={CHARACTERS} gameBalance={GAME_BALANCE} enemyBalance={ENEMY_BALANCE} onConfigChanged={onConfigChanged} notify={notify} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -411,7 +566,7 @@ function Feature({title,body,icon}) {
   return <div className="feature-card"><div className="feature-icon">{icon}</div><div><h3>{title}</h3><p>{body}</p></div></div>;
 }
 
-function Collection({save,squad,toggleSquad,setSave,notify}) {
+function Collection({save,squad,toggleSquad,setSave,notify,session}) {
   const [filter,setFilter] = useState('All');
   const [query,setQuery] = useState('');
   const [sort,setSort] = useState('rarity');
@@ -426,21 +581,31 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
     return list;
   },[filter,query,sort,verse,save.owned]);
 
-  const sellDuplicate = (id) => {
+  const sellDuplicate = async (id) => {
     const count = Number(save.owned[id]||0);
     if (count < 2) return notify('You need at least 2 copies before selling one.');
+    if (session) {
+      try { const result=await rpc(session,'sell_duplicate',{p_character_id:id}); setSave(normalizeSave(result.save)); notify(`Duplicate sold for ${result.gems_awarded} gems.`); }
+      catch(e) { notify(`Could not sell duplicate: ${e.message}`); }
+      return;
+    }
     const c = getChar(id);
     const value = {Common:8,Uncommon:12,Rare:20,Epic:35,Legendary:60,Mythic:100}[c.rarity];
     setSave(s=>({...s,gems:s.gems+value,owned:{...s.owned,[id]:count-1}}));
     notify(`Duplicate sold for ${value} gems.`);
   };
 
-  const unlockSlot = () => {
+  const unlockSlot = async () => {
     const next = save.unlockedSlots + 1;
     const req = SLOT_RULES[next];
     if (!req) return notify('All 5 squad slots are unlocked.');
     if (save.waveBest < req.wave) return notify(`Reach Wave ${req.wave} first.`);
     if (save.gems < req.gems) return notify(`You need ${req.gems} gems.`);
+    if (session) {
+      try { setSave(normalizeSave(await rpc(session,'unlock_squad_slot',{}))); notify(`Squad slot ${next} unlocked.`); }
+      catch(e) { notify(`Could not unlock slot: ${e.message}`); }
+      return;
+    }
     setSave(s=>({...s,gems:s.gems-req.gems,unlockedSlots:next}));
     notify(`Squad slot ${next} unlocked.`);
   };
@@ -564,7 +729,7 @@ function Collection({save,squad,toggleSquad,setSave,notify}) {
   );
 }
 
-function Summon({save,setSave,notify}) {
+function Summon({save,setSave,notify,session}) {
   const [pack, setPack] = useState(null);
   const [packBanner, setPackBanner] = useState('ALL-UNIT BANNER');
   const [reveal, setReveal] = useState([]);
@@ -574,6 +739,9 @@ function Summon({save,setSave,notify}) {
   const [bannerMode, setBannerMode] = useState('all');
   const [clock, setClock] = useState(Date.now());
   const [skipBest, setSkipBest] = useState(()=>localStorage.getItem('shonen-siege-skip-best')==='true');
+  const [sequentialReveal, setSequentialReveal] = useState(()=>localStorage.getItem('shonen-siege-sequential-reveal')!=='false');
+  const [sequenceActive, setSequenceActive] = useState(false);
+  const [sequenceIndex, setSequenceIndex] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -584,7 +752,7 @@ function Summon({save,setSave,notify}) {
   const remainingMs = rotationMs - (clock % rotationMs);
   const remainingLabel = `${Math.floor(remainingMs/60000)}:${String(Math.floor((remainingMs%60000)/1000)).padStart(2,'0')}`;
   const bannerPool = bannerMode === 'all' ? CHARACTERS : CHARACTERS.filter(c=>c.anime===activeVerse);
-  const pending = !!pack && reveal.length < pack.length;
+  const pending = !!pack && (reveal.length < pack.length || (sequenceActive && sequenceIndex === pack.length - 1));
   const open = (count) => {
     if (opening || pending) return;
     const cost = count===1 ? SINGLE_COST : count===5 ? FIVE_COST : TEN_COST;
@@ -592,25 +760,47 @@ function Summon({save,setSave,notify}) {
     const pool = bannerMode==='all' ? CHARACTERS : CHARACTERS.filter(c=>c.anime===activeVerse);
     const bannerLabel = bannerMode==='all' ? 'ALL-UNIT BANNER' : `${activeVerse.toUpperCase()} VERSE BANNER`;
     setOpening(true);
-    setTimeout(() => {
-      const result = openPack(save.pity,count,pool);
-      const owned = {...save.owned};
-      result.results.forEach(c=>owned[c.id]=(owned[c.id]||0)+1);
-      setSave(s=>({...s,gems:s.gems-cost,owned,pity:result.nextPity}));
-      setPack(result.results);
-      setPackBanner(bannerLabel);
-      setReveal([]);
-      setBestReveal(false);
-      setShowBannerRoster(false);
-      setOpening(false);
-    }, 300);
+    setTimeout(async () => {
+      try {
+        let results, nextSave;
+        if (session) {
+          const serverResult = await rpc(session,'perform_summon',{p_count:count,p_verse:bannerMode==='verse'?activeVerse:null});
+          results = (serverResult.cards||[]).map(row=>getChar(row.id)||row);
+          nextSave = normalizeSave(serverResult.save);
+        } else {
+          const result = openPack(save.pity,count,pool);
+          results = result.results;
+          const owned = {...save.owned};
+          results.forEach(c=>owned[c.id]=(owned[c.id]||0)+1);
+          nextSave = {...save,gems:save.gems-cost,owned,pity:result.nextPity};
+        }
+        setSave(nextSave);
+        setPack(results);
+        setPackBanner(bannerLabel);
+        setReveal([]); setSequenceIndex(0); setSequenceActive(false);
+        setBestReveal(false); setShowBannerRoster(false);
+      } catch (e) { notify(`Summon failed: ${e.message}`); }
+      finally { setOpening(false); }
+    }, 150);
+  };
+  const startSequentialReveal = () => { if (!pack?.length) return; setBestReveal(false); setSequenceIndex(0); setReveal([0]); setSequenceActive(true); };
+  const advanceSequentialReveal = () => {
+    if (!pack?.length) return;
+    if (sequenceIndex < pack.length - 1) {
+      const next = sequenceIndex + 1;
+      setSequenceIndex(next);
+      setReveal(v=>v.includes(next)?v:[...v,next]);
+    } else {
+      setSequenceActive(false);
+      setReveal(pack.map((_,i)=>i));
+    }
   };
   const revealAll = () => {
     if (!pack) return;
-    if (skipBest) { setReveal(pack.map((_,i)=>i)); return; }
+    if (skipBest) { if (sequentialReveal) startSequentialReveal(); else setReveal(pack.map((_,i)=>i)); return; }
     setBestReveal(true);
   };
-  const showRest = () => { setReveal(pack.map((_,i)=>i)); setBestReveal(false); };
+  const showRest = () => { setBestReveal(false); if (sequentialReveal) startSequentialReveal(); else setReveal(pack.map((_,i)=>i)); };
   const bestCard = pack?.reduce((best,c,i)=>best===null||rarityRank(c.rarity)>rarityRank(pack[best].rarity)?i:best,null);
 
   return (
@@ -638,8 +828,21 @@ function Summon({save,setSave,notify}) {
           </div>
           <div className="banner-roster-actions"><button className="text-btn" onClick={()=>setShowBannerRoster(v=>!v)}>{showBannerRoster?'HIDE BANNER ROSTER':'VIEW CHARACTERS IN THIS BANNER'} ({bannerPool.length})</button></div>
           {showBannerRoster && <div className="banner-roster"><div className="eyebrow">AVAILABLE CHARACTERS · {bannerMode==='all'?'ALL VERSES':activeVerse}</div><div className="banner-pool-grid">{bannerPool.map(c=><div key={c.id} className="banner-pool-card"><span style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><b>{c.name}</b><small>{c.anime}</small></div>)}</div></div>}
-          <label className="skip-setting"><input type="checkbox" checked={skipBest} onChange={e=>{setSkipBest(e.target.checked);localStorage.setItem('shonen-siege-skip-best',String(e.target.checked));}}/> Skip featured best-card reveal</label>
-          {pack && <div className="reveal-wrap"><div className="reveal-head"><div><div className="eyebrow">LATEST SUMMON · {packBanner}</div><small>{pending?'Reveal every card before summoning again.':'All cards revealed.'}</small></div><button className="text-btn" disabled={!pending} onClick={revealAll}>REVEAL ALL</button></div><div className="reveal-grid" style={{gridTemplateColumns:`repeat(${pack.length===1?1:5}, minmax(0,1fr))`}}>{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{characterImage(save,c.id)&&<img src={characterImage(save,c.id)} alt=""/>}</>:<b>?</b>}</button>)}</div></div>}
+          <div className="reveal-settings">
+            <label className="skip-setting"><input type="checkbox" checked={skipBest} onChange={e=>{setSkipBest(e.target.checked);localStorage.setItem('shonen-siege-skip-best',String(e.target.checked));}}/> Skip featured best-card reveal</label>
+            <label className="skip-setting sequential-setting"><input type="checkbox" checked={sequentialReveal} onChange={e=>{setSequentialReveal(e.target.checked);localStorage.setItem('shonen-siege-sequential-reveal',String(e.target.checked));}}/> Reveal cards one by one with a Next button</label>
+          </div>
+          {pack && <div className="reveal-wrap">
+            <div className="reveal-head"><div><div className="eyebrow">LATEST SUMMON · {packBanner}</div><small>{pending?'Reveal every card before summoning again.':'All cards revealed.'}</small></div><button className="text-btn" disabled={!pending||sequenceActive} onClick={revealAll}>{sequentialReveal?'START REVEAL':'REVEAL ALL'}</button></div>
+            {sequenceActive && pack[sequenceIndex] && <div className="sequence-reveal-card">
+              <div className="sequence-progress"><span>SUMMON REVEAL</span><b>{sequenceIndex+1}/{pack.length}</b></div>
+              <div className={`sequence-card-art ${String(pack[sequenceIndex].rarity).toLowerCase()}`}>{characterImage(save,pack[sequenceIndex].id)?<img src={characterImage(save,pack[sequenceIndex].id)} alt={pack[sequenceIndex].name}/>:<strong>{getIcon(pack[sequenceIndex])}</strong>}</div>
+              <div className="sequence-card-info"><span className="mini-rarity" style={{color:RARITY_COLOR[pack[sequenceIndex].rarity]}}>{pack[sequenceIndex].rarity}</span><h2>{pack[sequenceIndex].name}</h2><p>{pack[sequenceIndex].anime}</p><small>Edition #{1258 + sequenceIndex}</small></div>
+              <div className="sequence-dots">{pack.map((c,i)=><span key={`${c.id}-dot-${i}`} className={i<=sequenceIndex?'done':''} style={{'--dot-color':RARITY_COLOR[c.rarity]}}/>)}</div>
+              <button className="primary sequence-next" onClick={advanceSequentialReveal}>{sequenceIndex < pack.length-1 ? `NEXT CARD · ${sequenceIndex+2}/${pack.length}` : 'FINISH REVEAL'}</button>
+            </div>}
+            {!sequenceActive && <div className="reveal-grid" style={{gridTemplateColumns:`repeat(${pack.length===1?1:5}, minmax(0,1fr))`}}>{pack.map((c,i)=><button key={`${c.id}-${i}`} className={`reveal-card ${reveal.includes(i)?'revealed':''}`} onClick={()=>setReveal(v=>v.includes(i)?v:v.concat(i))}>{reveal.includes(i)?<><span className="mini-rarity" style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</span><strong>{c.name}</strong><small>{c.anime}</small>{characterImage(save,c.id)&&<img src={characterImage(save,c.id)} alt=""/>}</>:<b>?</b>}</button>)}</div>}
+          </div>}
           {bestReveal && pack && <div className="best-reveal-backdrop"><section className="best-reveal-modal"><div className="eyebrow">HIGHLIGHT CARD</div><div className={`best-card-art ${pack[bestCard].rarity.toLowerCase()}`}>{characterImage(save,pack[bestCard].id)?<img src={characterImage(save,pack[bestCard].id)} alt=""/>:<strong>{getIcon(pack[bestCard])}</strong>}</div><span className="mini-rarity" style={{color:RARITY_COLOR[pack[bestCard].rarity]}}>{pack[bestCard].rarity}</span><h2>{pack[bestCard].name}</h2><p>{pack[bestCard].anime}</p><button className="primary" onClick={showRest}>SHOW THE REST</button></section></div>}
         </section>
         <aside className="panel pity-side"><div className="eyebrow">PITY TRACKER</div>
@@ -652,9 +855,9 @@ function Summon({save,setSave,notify}) {
   );
 }
 
-const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:100, enemies:[], units:[], gemsEarned:0, message:'', messageKind:'normal', nextCountdown:0};
+const RUN_IDLE = {status:'idle', wave:0, cash:0, hp:100, enemies:[], units:[], gemsEarned:0, serverRunId:null, message:'', messageKind:'normal', nextCountdown:0};
 
-function Infinite({save,setSave,squad,setPage,notify}) {
+function Infinite({save,setSave,squad,setPage,notify,session}) {
   const [run,setRun] = useState(RUN_IDLE);
   const [autoNext,setAutoNext] = useState(true);
   const [speed,setSpeed] = useState(1);
@@ -666,10 +869,22 @@ function Infinite({save,setSave,squad,setPage,notify}) {
 
   const activeSquad = squad.slice(0,save.unlockedSlots).map(getChar).filter(Boolean);
 
-  const startRun = (continueRun) => {
-    const startWave = continueRun ? Math.max(1, save.waveBest + 1) : 1;
+  const startRun = async (continueRun) => {
+    let startWave = continueRun ? Math.max(1, save.waveBest + 1) : 1;
+    let serverRunId = null;
+    if (session) {
+      try {
+        const cloudRun = await rpc(session,'start_infinite_run',{p_continue:Boolean(continueRun)});
+        startWave = Number(cloudRun?.start_wave || startWave);
+        serverRunId = cloudRun?.run_id || null;
+        if (!serverRunId) throw new Error('The backend did not create a run session.');
+      } catch (e) {
+        notify(`Could not start your cloud run: ${e.message}`);
+        return;
+      }
+    }
     const startCash = Math.round(GAME_BALANCE.startingCash + Math.max(0,startWave-1)*GAME_BALANCE.continueCashPerClearedWave);
-    setRun({status:save.waveBest>0 || startWave>1?'warning':'warning', wave:startWave, cash:startCash, hp:100, enemies:[], units:[], gemsEarned:0, message:`WAVE ${startWave}${startWave%GAME_BALANCE.bossEveryWaves===0?' • BOSS INCOMING':''}`, messageKind:startWave%GAME_BALANCE.bossEveryWaves===0?'boss':'normal', nextCountdown:0});
+    setRun({status:'warning', wave:startWave, cash:startCash, hp:100, enemies:[], units:[], gemsEarned:0, serverRunId, message:`WAVE ${startWave}${startWave%GAME_BALANCE.bossEveryWaves===0?' • BOSS INCOMING':''}`, messageKind:startWave%GAME_BALANCE.bossEveryWaves===0?'boss':'normal', nextCountdown:0});
   };
 
   const beginWave = (wave) => {
@@ -753,7 +968,17 @@ function Infinite({save,setSave,squad,setPage,notify}) {
         if (remaining.length===0) {
           const reward = gemReward(current.wave);
           const newBest = Math.max(save.waveBest,current.wave);
-          setSave(s=>({...s,gems:s.gems+reward,waveBest:newBest}));
+          if (session) {
+            if (current.serverRunId) {
+              rpc(session,'claim_wave_reward',{p_run_id:current.serverRunId,p_wave:current.wave})
+                .then(result=>setSave(normalizeSave(result.save)))
+                .catch(e=>notify(`Cloud wave reward failed: ${e.message}`));
+            } else {
+              notify('This run was not started with a cloud run session, so its wave reward was not synced. Start a fresh run while signed in.');
+            }
+          } else {
+            setSave(s=>({...s,gems:s.gems+reward,waveBest:newBest}));
+          }
           const waveStipend = GAME_BALANCE.waveCashBase + current.wave * GAME_BALANCE.waveCashPerWave;
           const incomeBonus = units.reduce((sum,u)=>sum + unitIncome(u),0);
           const cashRewardTotal = waveStipend + incomeBonus;
@@ -834,13 +1059,20 @@ function Infinite({save,setSave,squad,setPage,notify}) {
 
   const quit = () => {
     setPlacementMode(null);
-    setRun(r=>({...r,status:'idle',wave:0,cash:0,hp:100,enemies:[],units:[],message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'}));
+    if (session && run.serverRunId) rpc(session,'finish_infinite_run',{p_run_id:run.serverRunId}).catch(e=>console.warn('Could not close cloud run:',e));
+    setRun({...RUN_IDLE,message:'RUN QUIT • CLEARED WAVE GEMS KEPT',messageKind:'normal'});
   };
 
   const restart = () => {
     setPlacementMode(null);
-    setRun({status:'warning',wave:1,cash:GAME_BALANCE.startingCash,hp:100,enemies:[],units:[],gemsEarned:0,message:'WAVE 1',messageKind:'normal',nextCountdown:0});
+    void startRun(false);
   };
+
+  useEffect(() => {
+    if (session && run.status==='gameover' && run.serverRunId) {
+      rpc(session,'finish_infinite_run',{p_run_id:run.serverRunId}).catch(e=>console.warn('Could not close cloud run:',e));
+    }
+  }, [session?.access_token,run.status,run.serverRunId]);
 
   const continueRun = () => startRun(true);
   const [selectedUnit,setSelectedUnit] = useState(null);
@@ -903,7 +1135,7 @@ function Infinite({save,setSave,squad,setPage,notify}) {
             {run.enemies.map(e=>{
               const p=pathPosition(e.progress);
               return <div key={e.id} className={`enemy-token ${e.type}`} style={{left:`${p.x}%`,top:`${p.y}%`}}>
-                <div className="enemy-icon" aria-label={`${e.type} enemy`}>{enemyImage(e.type) ? <img src={enemyImage(e.type)} alt=""/> : ({boss:'♛',fast:'↯',tank:'⬟',regen:'✚',shield:'⬡',armored:'▣',normal:'◆'})[e.type] || '◆'}</div>
+                <div className="enemy-icon" aria-label={`${e.type} enemy`}>{enemyImage(e.type,e.name) ? <img src={enemyImage(e.type,e.name)} alt=""/> : ({boss:'♛',fast:'↯',tank:'⬟',regen:'✚',shield:'⬡',armored:'▣',normal:'◆'})[e.type] || '◆'}</div>
                 <div className="enemy-health"><i style={{width:`${Math.max(0,(e.hp/e.maxHp)*100)}%`}}/></div>
                 {e.type==='boss' && <span className="boss-tag">{e.name}</span>}
               </div>
