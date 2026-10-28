@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { GAME_BALANCE as BASE_GAME_BALANCE, ENEMY_BALANCE as BASE_ENEMY_BALANCE, CHARACTER_OVERRIDES as BASE_CHARACTER_OVERRIDES, CHARACTER_ART as BASE_CHARACTER_ART, ENEMY_ART as BASE_ENEMY_ART, ROSTER_ADDITIONS } from './game-config.js';
+import { GAME_BALANCE as BASE_GAME_BALANCE, ENEMY_BALANCE as BASE_ENEMY_BALANCE, CHARACTER_OVERRIDES as BASE_CHARACTER_OVERRIDES, CHARACTER_ART as BASE_CHARACTER_ART, ENEMY_ART as BASE_ENEMY_ART, ROSTER_ADDITIONS, DEFAULT_COMBAT_BALANCE as BASE_COMBAT_BALANCE } from './game-config.js';
 import { AccountPage, AdminPage } from './account-admin.jsx';
-import { isBackendConfigured, restoreSession, getProfile, rpc, fetchPublicConfig, signOut } from './backend.js';
+import { isBackendConfigured, restoreSession, getProfile, rpc, fetchPublicConfig, signOut, getPendingAuthCallbackType, clearPendingAuthCallbackType } from './backend.js';
 
 let GAME_BALANCE = { ...BASE_GAME_BALANCE, rarityDefaults: { ...BASE_GAME_BALANCE.rarityDefaults } };
 let ENEMY_BALANCE = JSON.parse(JSON.stringify(BASE_ENEMY_BALANCE));
+let COMBAT_BALANCE = JSON.parse(JSON.stringify(BASE_COMBAT_BALANCE));
+let ENEMY_NAMES = {};
+const DEFAULT_ENEMY_NAMES = {normal:'Normal',fast:'Fast',tank:'Tank',regen:'Regenerator',shield:'Shielded',armored:'Armoured',flying:'Flyer','strong-1':'Strong Enemy 1','strong-2':'Strong Enemy 2'};
 let CHARACTER_ART = { ...BASE_CHARACTER_ART };
 let ENEMY_ART = { ...BASE_ENEMY_ART };
 let REMOTE_CHARACTER_ART = {};
@@ -111,14 +114,68 @@ const publicAsset = (path) => `${import.meta.env.BASE_URL}${String(path || '').r
 const characterImage = (save, id) => REMOTE_CHARACTER_ART[id] || save.cardImages?.[id] || (CHARACTER_ART[id] ? (String(CHARACTER_ART[id]).startsWith('http') ? CHARACTER_ART[id] : publicAsset(CHARACTER_ART[id])) : '');
 const enemyImage = (type, name='') => {
   const bossId = type === 'boss' && name ? `boss-${String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}` : '';
+  const configId = bossId || type;
   const remote = (bossId && REMOTE_ENEMY_ART[bossId]) || REMOTE_ENEMY_ART[type];
   if (remote) return remote;
+  // Character-based enemies reuse that character's artwork, while keeping independent enemy stats.
+  const characterId = COMBAT_BALANCE.enemyMeta?.[configId]?.characterId;
+  if (characterId) {
+    const charRemote = REMOTE_CHARACTER_ART[characterId];
+    if (charRemote) return charRemote;
+    const charPath = CHARACTER_ART[characterId];
+    if (charPath) return String(charPath).startsWith('http') ? charPath : publicAsset(charPath);
+  }
   const path = ENEMY_ART[type];
   return path ? (String(path).startsWith('http') ? path : publicAsset(path)) : '';
 };
 const unitIncome = (unit) => unit?.card?.role === 'money'
-  ? Math.round((unit.card.incomePerWave || 0) * (1 + Math.max(0, (unit.level || 1) - 1) * GAME_BALANCE.incomeUpgradeMultiplier))
+  ? Number(characterLevelStats(unit.card, unit.level || 1).income || 0)
   : 0;
+
+function defaultCharacterLevelStats(card, level) {
+  const lv = Math.max(1, Math.min(Number(level) || 1, UPGRADE_LIMIT[card?.rarity] || 1));
+  const step = lv - 1;
+  const rank = Math.max(0, rarityRank(card?.rarity));
+  if (card?.role === 'money') {
+    return { level:lv, damage:0, range:0, attackSpeed:0, income:Math.round(Number(card.incomePerWave || 0) * (1 + step * GAME_BALANCE.incomeUpgradeMultiplier)), buffPercent:0, upgradeCost:lv === 1 ? 0 : Math.round(90 + (lv - 1) * 55 + rank * 25) };
+  }
+  let damage = Number(card?.baseDamage || 0);
+  for (let n=0;n<step;n++) damage=Math.round(damage*1.3);
+  return {
+    level:lv,
+    damage,
+    range:Math.max(11, Number(card?.range || 0) / 12) + 0.9 * step,
+    attackSpeed:Math.max(220, Number(card?.attackSpeed || 680) - 38 * step),
+    income:0,
+    buffPercent:card?.role === 'support' ? Number(card?.buffPercent || 0.13) * (1 + step * 0.1) : 0,
+    upgradeCost:lv === 1 ? 0 : Math.round(90 + (lv - 1) * 55 + rank * 25),
+  };
+}
+function characterLevelStats(card, level) {
+  const lv = Math.max(1, Math.min(Number(level) || 1, UPGRADE_LIMIT[card?.rarity] || 1));
+  const fallback = defaultCharacterLevelStats(card, lv);
+  const rows = COMBAT_BALANCE.characters?.[card?.id]?.levels;
+  const custom = Array.isArray(rows) ? rows.find(row => Number(row.level) === lv) : rows?.[String(lv)];
+  if (!custom || typeof custom !== 'object') return fallback;
+  return { ...fallback, ...custom, level:lv };
+}
+function characterMoves(card) {
+  const saved = COMBAT_BALANCE.characters?.[card?.id]?.moves;
+  if (Array.isArray(saved) && saved.length) return saved;
+  return (card?.abilities || []).slice(0,3).map((name,index)=>({
+    name,
+    unlockLevel:[2,4,6][index] || 2,
+    damageMultiplier:[1.5,2.1,2.8][index] || 1.5,
+    cooldownSeconds:[6,10,15][index] || 6,
+    splashRadius:[0,1.3,2.6][index] || 0,
+  }));
+}
+function characterCanHitAir(card) {
+  const configured = COMBAT_BALANCE.characters?.[card?.id]?.canHitAir;
+  // Default rule: longer-range characters can target flyers; other characters can be enabled in Admin.
+  return configured === undefined ? Number(card?.range || 0) >= 115 : configured !== false;
+}
+function levelStageLabel(level) { return level === 1 ? 'Base' : `Upgrade ${level-1}`; }
 
 const STARTERS = ['naruto','deku','tanjiro'];
 
@@ -186,17 +243,39 @@ function gemReward(wave) {
 }
 
 function cashReward(wave, type='normal') {
-  const base = {normal:24, fast:28, tank:40, regen:34, shield:36, armored:42, boss:260}[type] || 24;
+  const base = {normal:24, fast:28, tank:40, regen:34, shield:36, armored:42, flying:32, 'strong-1':70, 'strong-2':135, boss:260}[type] || 24;
   return Math.round(base * (1 + wave * 0.045) * GAME_BALANCE.enemyCashMultiplier);
 }
 
 function enemyFor(wave, index, total, id) {
   const bossWave = wave % GAME_BALANCE.bossEveryWaves === 0;
+  const exactFor = (type, base, boss=false) => {
+    const meta = COMBAT_BALANCE.enemyMeta?.[type] || {};
+    const override = COMBAT_BALANCE.enemyWaves?.[type]?.[String(wave)] || {};
+    const scaledHp = boss ? Number(base.hp || 0) + wave * Number(base.hpPerWave || 0)
+      : Number(base.hp || 0) * (1 + wave * GAME_BALANCE.enemyHealthPerWave) * (1 + Math.max(0, index-total*0.5) * 0.01);
+    const hp = Math.max(1, Math.round(override.hp != null ? Number(override.hp) : scaledHp));
+    const speed = Math.max(0, Number(override.speed != null ? override.speed : (Number(base.speed || 0) * (1 + wave * 0.01))));
+    const shield = Math.max(0, Number(override.shield != null ? override.shield : (Number(base.shield || 0) + (!boss && type==='shield' ? wave*2 : boss ? wave*20 : 0))));
+    return {
+      id, type:boss ? 'boss' : type, enemyConfigId:type, name:ENEMY_NAMES[type] || base.name || DEFAULT_ENEMY_NAMES[type] || type,
+      progress:-0.035*(index+1), hp, maxHp:hp, speed,
+      damage:Math.max(0,Number(override.damage != null ? override.damage : (base.damage ?? 34))),
+      armor:Math.max(0,Math.min(.95,Number(override.armor != null ? override.armor : (base.armor || 0)))),
+      shield, regen:Math.max(0,Number(override.regen != null ? override.regen : (base.regen || 0))),
+      reward:cashReward(wave,boss?'boss':type),
+      movementType:meta.movementType || 'ground',
+      minUnitLevel:Math.max(1,Number(meta.minUnitLevel || 1)),
+      characterId:meta.characterId || null,
+    };
+  };
   if (bossWave && index === total - 1) {
-    const b = ENEMY_BALANCE.bosses[(Math.floor(wave / GAME_BALANCE.bossEveryWaves) - 1) % ENEMY_BALANCE.bosses.length];
-    const hp = b.hp + wave * b.hpPerWave;
-    return {id, type:'boss', name:b.name, progress:-0.035*(index+1), hp, maxHp:hp, speed:b.speed, damage:100, armor:b.armor, shield:b.shield + wave * 20, regen:0, reward:cashReward(wave,'boss')};
+    const bosses = ENEMY_BALANCE.bosses || BASE_ENEMY_BALANCE.bosses;
+    const b = bosses[(Math.floor(wave / GAME_BALANCE.bossEveryWaves) - 1) % bosses.length];
+    const type = `boss-${String(b.name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}`;
+    return exactFor(type, { ...b, damage:b.damage ?? 100 }, true);
   }
+
   const roll = (index + wave) % 19;
   let type = 'normal';
   if (wave >= 6 && roll < 2) type = 'fast';
@@ -204,10 +283,20 @@ function enemyFor(wave, index, total, id) {
   else if (wave >= 14 && roll < 6) type = 'regen';
   else if (wave >= 18 && roll < 8) type = 'shield';
   else if (wave >= 22 && roll < 10) type = 'armored';
+
+  // Added enemy classes can enter the roster at a chosen wave and spawn chance.
+  const customCandidates = Object.keys(ENEMY_BALANCE).filter(enemyId => {
+    if (enemyId === 'bosses' || ['normal','fast','tank','regen','shield','armored'].includes(enemyId)) return false;
+    const stats = ENEMY_BALANCE[enemyId];
+    const meta = COMBAT_BALANCE.enemyMeta?.[enemyId] || {};
+    return stats && stats.enabled !== false && meta.customSpawn === true && wave >= Number(meta.spawnFromWave || 1)
+      && (meta.spawnUntilWave == null || wave <= Number(meta.spawnUntilWave))
+      && Math.random() < Math.max(0,Math.min(1,Number(meta.spawnChance ?? 0.1)));
+  });
+  if (customCandidates.length) type = customCandidates[Math.floor(Math.random()*customCandidates.length)];
   let st = ENEMY_BALANCE[type] || ENEMY_BALANCE.normal;
-  if (st?.enabled === false) { type = 'normal'; st = ENEMY_BALANCE.normal; }
-  const hp = Math.round(st.hp * (1 + wave * GAME_BALANCE.enemyHealthPerWave) * (1 + Math.max(0, index-total*0.5) * 0.01));
-  return {id, type, name:type, progress:-0.035*(index+1), hp, maxHp:hp, speed:st.speed*(1+wave*0.01), damage:st.damage, armor:st.armor, shield:st.shield + (type==='shield' ? wave*2 : 0), regen:st.regen, reward:cashReward(wave,type)};
+  if (st?.enabled === false) { type='normal'; st=ENEMY_BALANCE.normal; }
+  return exactFor(type, st, false);
 }
 
 const PATH = [
@@ -331,6 +420,17 @@ function applyRemoteConfig({characters=[], enemies=[], settings=[]}) {
     if (row?.value && typeof row.value === 'object') {
       GAME_BALANCE = { ...GAME_BALANCE, ...row.value, rarityDefaults: { ...GAME_BALANCE.rarityDefaults, ...(row.value.rarityDefaults || {}) } };
     }
+    const combatRow = settings.find(s => s.key === 'combat_balance');
+    if (combatRow?.value && typeof combatRow.value === 'object') {
+      const remoteCombat = combatRow.value;
+      COMBAT_BALANCE = {
+        ...BASE_COMBAT_BALANCE,
+        ...remoteCombat,
+        characters: { ...(BASE_COMBAT_BALANCE.characters || {}), ...(remoteCombat.characters || {}) },
+        enemyWaves: { ...(BASE_COMBAT_BALANCE.enemyWaves || {}), ...(remoteCombat.enemyWaves || {}) },
+        enemyMeta: { ...(BASE_COMBAT_BALANCE.enemyMeta || {}), ...(remoteCombat.enemyMeta || {}) },
+      };
+    }
   }
   if (Array.isArray(characters) && characters.length) {
     const map = new Map(characters.map(c => [c.id, c]));
@@ -343,6 +443,7 @@ function applyRemoteConfig({characters=[], enemies=[], settings=[]}) {
   if (Array.isArray(enemies) && enemies.length) {
     const next = JSON.parse(JSON.stringify(ENEMY_BALANCE));
     const art = {};
+    ENEMY_NAMES = Object.fromEntries(enemies.map(row => [row.id, row.name || row.id]));
     for (const row of enemies) {
       if (row.art_url) art[row.id] = row.art_url;
       if (row.id.startsWith('boss-')) {
@@ -401,14 +502,10 @@ function App() {
       } catch (e) { console.warn('Published config could not be loaded:', e); }
       try {
         const restored = await restoreSession();
-        if (restored) {
-          const p = await getProfile(restored);
-          const cloudSave = await rpc(restored, 'get_my_save', {});
-          if (alive) {
-            setSession(restored); setProfile(p); setSaveImported(Boolean(cloudSave?.saveImported));
-            if (cloudSave) { setSave(normalizeSave(cloudSave)); if (Array.isArray(cloudSave.squad) && cloudSave.squad.length) setSquad(cloudSave.squad.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT)); }
-          }
-        }
+        const authCallbackType = getPendingAuthCallbackType();
+        if (authCallbackType && alive) setPage('account');
+        if (authCallbackType && authCallbackType !== 'recovery') clearPendingAuthCallbackType();
+        if (restored && alive) await onAuthenticated(restored);
       } catch (e) { console.warn('Account session could not be restored:', e); }
       finally { if (alive) setAccountLoading(false); }
     })();
@@ -442,15 +539,36 @@ function App() {
     setSquad(next);
   };
 
-  const onAuthenticated = async (newSession) => {
+  const onAuthenticated = async (newSession, options = {}) => {
     const p = await getProfile(newSession);
-    const cloudSave = await rpc(newSession,'get_my_save',{});
+    let cloudSave = await rpc(newSession,'get_my_save',{});
+    let pendingImport = false;
+    try { pendingImport = localStorage.getItem('shonen-siege-pending-local-save-import-v1') === '1'; } catch {}
+    const createdRecently = p?.auth_created_at && (Date.now() - Date.parse(p.auth_created_at)) < 5 * 60 * 1000;
+    const starterOwned = { naruto: 1, deku: 1, tanjiro: 1 };
+    const localOwned = localSaveBackup?.owned || {};
+    const hasLegacyProgress = Boolean(localSaveBackup && (
+      Number(localSaveBackup.gems ?? 250) !== 250 || Number(localSaveBackup.waveBest ?? 0) > 0 || Number(localSaveBackup.unlockedSlots ?? 3) > 3 ||
+      Object.entries(localOwned).some(([id,count]) => Number(count) !== Number(starterOwned[id] || 0)) ||
+      Object.values(localSaveBackup.pity || {}).some(value => Number(value) > 0) ||
+      JSON.stringify(localSaveBackup.squad || ['naruto','deku','tanjiro']) !== JSON.stringify(['naruto','deku','tanjiro'])
+    ));
+    // Auto-import only after signup or when this browser explicitly has a pending import. A recently created account on a different device must not import that device's unrelated/default save.
+    if (!cloudSave?.saveImported && localSaveBackup && (options.isNewAccount || pendingImport || (createdRecently && hasLegacyProgress))) {
+      try {
+        cloudSave = await rpc(newSession, 'import_my_local_save', { p_save: localSaveBackup });
+        try { localStorage.removeItem('shonen-siege-pending-local-save-import-v1'); } catch {}
+      } catch (e) {
+        console.warn('Local save import was not completed:', e);
+        notify('Account connected. Open Account to import your old device save if needed.');
+      }
+    }
     setSession(newSession); setProfile(p); setSaveImported(Boolean(cloudSave?.saveImported));
     if (cloudSave) {
       setSave(normalizeSave(cloudSave));
       if (Array.isArray(cloudSave.squad) && cloudSave.squad.length) setSquad(cloudSave.squad.filter(id=>getChar(id)).slice(0,SQUAD_LIMIT));
     }
-    notify('Account connected.');
+    if (!pendingImport && !options.isNewAccount && !createdRecently) notify('Account connected.');
   };
   const onSignedOut = async () => {
     try { await signOut(session); } catch (e) { console.warn(e); }
@@ -473,6 +591,11 @@ function App() {
   useEffect(() => {
     if (page === 'admin' && (!session?.access_token || profile?.role !== 'admin')) setPage('account');
   }, [page, session?.access_token, profile?.role]);
+
+  // Enforce account-first access: do not briefly expose gameplay while the session is loading,
+  // and do not render the game when the backend account is missing.
+  if (isBackendConfigured() && accountLoading) return <div className="app"><header className="topbar"><div className="brand"><span className="brand-mark">⚔</span><span>SHONEN <b>SIEGE</b></span></div></header><main className="page"><section className="panel"><h1>Checking your account…</h1><p className="muted">Your game loads after your account session is checked.</p></section></main></div>;
+  if (isBackendConfigured() && (!session?.access_token || !profile)) return <div className="app"><header className="topbar"><div className="brand"><span className="brand-mark">⚔</span><span>SHONEN <b>SIEGE</b></span></div><span className="account-required-label">ACCOUNT REQUIRED</span></header><AccountPage session={session} profile={profile} accountLoading={accountLoading} currentSave={save} localSaveBackup={localSaveBackup} saveImported={saveImported} onAuthenticated={onAuthenticated} onSignedOut={onSignedOut} onSaveUpdated={onSaveUpdated} requiredGate /></div>;
 
   return (
     <div className="app">
@@ -690,38 +813,22 @@ function Collection({save,squad,toggleSquad,setSave,notify,session}) {
       {detailCharacter && (() => {
         const c = detailCharacter;
         const maxLevel = UPGRADE_LIMIT[c.rarity];
-        const maxIncome = Math.round((c.incomePerWave || 0) * (1 + (maxLevel-1) * GAME_BALANCE.incomeUpgradeMultiplier));
-        const maxDamage = c.role === 'money' ? 0 : Math.round(c.baseDamage * Math.pow(1.3, maxLevel-1));
-        const baseFieldRange = c.role === 'money' ? 0 : Math.max(11, c.range/12);
-        const maxFieldRange = c.role === 'money' ? 0 : baseFieldRange + .9*(maxLevel-1);
-        const maxSpa = c.role === 'money' ? 0 : Math.max(220, c.attackSpeed - 38*(maxLevel-1)) / 1000;
-        const baseSpa = c.role === 'money' ? 0 : c.attackSpeed / 1000;
+        const levels = Array.from({length:maxLevel},(_,i)=>characterLevelStats(c,i+1));
+        const moves = characterMoves(c);
+        const maxStats = levels[levels.length-1] || characterLevelStats(c,1);
+        const baseStats = levels[0] || characterLevelStats(c,1);
         return <div className="stat-modal-backdrop" onClick={()=>setDetailId(null)}>
           <section className="stat-modal" role="dialog" aria-modal="true" aria-label={`${c.name} statistics`} onClick={e=>e.stopPropagation()}>
             <button className="stat-modal-close" onClick={()=>setDetailId(null)} aria-label="Close stats">×</button>
-            <div className="eyebrow">CHARACTER DOSSIER</div>
-            <div className="stat-modal-title"><span className="stat-modal-mark" style={{borderColor:RARITY_COLOR[c.rarity],color:RARITY_COLOR[c.rarity]}}>{characterImage(save,c.id)?<img src={characterImage(save,c.id)} alt=""/>:getIcon(c)}</span><div><h2>{c.name}</h2><p>{c.anime} · <b style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</b></p>{c.role==='money'&&<small className="role-badge">💰 +{c.incomePerWave} cash per cleared wave</small>}</div></div>
-            {c.role === 'money' ? <>
-              <div className="stat-compare-grid income-stat-grid">
-                <div className="stat-compare-card"><span>BASE INCOME</span><b>💰 {c.incomePerWave}</b><small>Cash per cleared wave · Lv.1</small></div>
-                <div className="stat-compare-card"><span>MAX INCOME</span><b>💰 {maxIncome}</b><small>Cash per cleared wave · Lv.{maxLevel}</small></div>
-                <div className="stat-compare-card"><span>INCOME PER UPGRADE</span><b>+{Math.round(GAME_BALANCE.incomeUpgradeMultiplier*100)}%</b><small>Each upgrade level</small></div>
-              </div>
-              <div className="stat-modal-bottom"><div><span className="eyebrow">ROLE</span><strong>Money only</strong></div><div><span className="eyebrow">UPGRADE CAP</span><strong>Lv.{maxLevel}</strong></div><div><span className="eyebrow">DEPLOY COST</span><strong>💰 {c.cost}</strong></div></div>
-              <p className="stat-footnote">Money units never attack: they have no damage, attack range, or attack speed. They earn cash only when a wave is cleared while deployed.</p>
-            </> : <>
-              <div className="stat-compare-grid">
-                <div className="stat-compare-card"><span>BASE DAMAGE</span><b>{c.baseDamage}</b><small>Lv.1</small></div>
-                <div className="stat-compare-card"><span>MAX DAMAGE</span><b>{maxDamage}</b><small>Lv.{maxLevel}</small></div>
-                <div className="stat-compare-card"><span>BASE SPA</span><b>{baseSpa.toFixed(2)}s</b><small>Seconds / attack</small></div>
-                <div className="stat-compare-card"><span>MAX SPA</span><b>{maxSpa.toFixed(2)}s</b><small>Seconds / attack</small></div>
-                <div className="stat-compare-card"><span>BASE RANGE</span><b>{baseFieldRange.toFixed(1)}</b><small>Field range</small></div>
-                <div className="stat-compare-card"><span>MAX RANGE</span><b>{maxFieldRange.toFixed(1)}</b><small>Field range</small></div>
-              </div>
-              <div className="stat-modal-bottom"><div><span className="eyebrow">UPGRADE CAP</span><strong>Lv.{maxLevel}</strong></div><div><span className="eyebrow">MAX-LEVEL DPS</span><strong>{Math.round(maxDamage/maxSpa)}</strong></div><div><span className="eyebrow">DEPLOY COST</span><strong>💰 {c.cost}</strong></div></div>
-              {c.role === 'support' && <p className="stat-footnote">Support role: nearby damage units gain +{Math.round((c.buffPercent||0.13)*100)}% damage while inside this unit’s support radius.</p>}
-              <div className="stat-ability-list"><span className="eyebrow">TECHNIQUE NAMES</span>{[[2,c.abilities[0]],[4,c.abilities[1]],[6,c.abilities[2]]].filter(([lv])=>lv<=maxLevel).map(([lv,a])=><span key={a}>Lv.{lv} · {a}</span>)}</div>
-            </>}
+            <div className="eyebrow">CHARACTER DOSSIER · FULL UPGRADE PATH</div>
+            <div className="stat-modal-title"><span className="stat-modal-mark" style={{borderColor:RARITY_COLOR[c.rarity],color:RARITY_COLOR[c.rarity]}}>{characterImage(save,c.id)?<img src={characterImage(save,c.id)} alt=""/>:getIcon(c)}</span><div><h2>{c.name}</h2><p>{c.anime} · <b style={{color:RARITY_COLOR[c.rarity]}}>{c.rarity}</b></p><small>{c.role==='money'?'Income unit':c.role==='support'?'Support unit':'Damage unit'} · {maxLevel} total levels</small></div></div>
+            <div className="stat-table-wrap"><table className="level-stats-table"><thead><tr><th>LEVEL</th><th>DMG</th><th>RANGE</th><th>SPA</th><th>DPS</th><th>INCOME / WAVE</th><th>SUPPORT BUFF</th><th>UPGRADE COST</th></tr></thead><tbody>
+              {levels.map((st,i)=><tr key={st.level}><td><b>{st.level}</b><small>{levelStageLabel(st.level)}</small></td><td>{c.role==='money'?'—':Number(st.damage).toLocaleString(undefined,{maximumFractionDigits:1})}</td><td>{c.role==='money'?'—':Number(st.range).toFixed(1)}</td><td>{c.role==='money'?'—':(Number(st.attackSpeed)/1000).toFixed(2)+'s'}</td><td>{c.role==='money'?'—':Math.round(Number(st.damage)/(Math.max(1,Number(st.attackSpeed))/1000)).toLocaleString()}</td><td>{c.role==='money'?'💰 '+Number(st.income||0).toLocaleString():'—'}</td><td>{c.role==='support'?(Number(st.buffPercent||0)*100).toFixed(1)+'%':'—'}</td><td>{st.level===1?'—':'💰 '+Number(st.upgradeCost||0).toLocaleString()}</td></tr>)}
+            </tbody></table></div>
+            <div className="stat-modal-bottom"><div><span className="eyebrow">DEPLOY COST</span><strong>💰 {c.cost}</strong></div><div><span className="eyebrow">BASE DPS</span><strong>{c.role==='money'?'—':Math.round(Number(baseStats.damage)/(Math.max(1,Number(baseStats.attackSpeed))/1000))}</strong></div><div><span className="eyebrow">MAX DPS</span><strong>{c.role==='money'?'—':Math.round(Number(maxStats.damage)/(Math.max(1,Number(maxStats.attackSpeed))/1000))}</strong></div></div>
+            {c.role==='support' && <p className="stat-footnote">Support aura: nearby damage units gain +{Math.round((c.buffPercent||0.13)*100)}% damage, up to the global support cap.</p>}
+            <div className="stat-ability-list"><span className="eyebrow">MOVES & TECHNIQUES</span>{moves.map((move,index)=><div className="stat-move-row" key={`${move.name}-${index}`}><div><b>{move.name}</b><small>Unlocks at Level {Number(move.unlockLevel||[2,4,6][index]||2)} · {Number(move.unlockLevel||[2,4,6][index]||2)<=maxLevel?'Available for this rarity':'Above this rarity’s current cap'}</small></div><span>×{Number(move.damageMultiplier||1).toFixed(2)} damage</span><span>{Number(move.cooldownSeconds||0).toFixed(1)}s cooldown</span><span>{Number(move.splashRadius||0).toFixed(1)} splash</span></div>)}</div>
+            <p className="stat-footnote">Damage and range show the exact level values used by the battle system. SPA means seconds per attack. Moves trigger automatically when unlocked and off cooldown.</p>
           </section>
         </div>;
       })()}
@@ -937,27 +1044,44 @@ function Infinite({save,setSave,squad,setPage,notify,session}) {
         }
 
         // Units attack. Units never depend on nested React state updates.
-        const units = current.units.map(u => ({...u, cooldown:Math.max(0,u.cooldown-dt*1000)}));
+        const units = current.units.map(u => ({...u, cooldown:Math.max(0,u.cooldown-dt*1000), moveCooldowns:(u.moveCooldowns||characterMoves(u.card).map(()=>0)).map(n=>Math.max(0,Number(n||0)-dt))}));
         for (const u of units) {
           if (u.card.role === 'money') continue;
           if (u.cooldown > 0) continue;
           const upos = {x:u.x,y:u.y};
           const candidates = remaining.filter(e => {
             const p = pathPosition(e.progress);
+            if (e.minUnitLevel > u.level) return false;
+            if (e.movementType === 'flying' && !characterCanHitAir(u.card)) return false;
             return e.hp > 0 && distancePct(upos.x,upos.y,p.x,p.y) <= u.rangePct;
           }).sort((a,b)=>b.progress-a.progress);
           const target = candidates[0];
           if (!target) continue;
           const supportBonus = units.filter(support => support !== u && support.card.role === 'support' && distancePct(support.x,support.y,u.x,u.y) <= support.rangePct)
-            .reduce((sum,support) => sum + (support.card.buffPercent || 0.13), 0);
-          let damage = u.damage * (1 + Math.min(GAME_BALANCE.supportDamageBonusCap, supportBonus));
-          const shieldHit = Math.min(target.shield, damage);
-          target.shield -= shieldHit;
-          damage -= shieldHit;
-          if (damage > 0) damage *= (1-target.armor);
-          target.hp -= damage;
+            .reduce((sum,support) => sum + Math.max(0,Number(characterLevelStats(support.card,support.level).buffPercent ?? support.card.buffPercent ?? 0.13)), 0);
+          const moves = characterMoves(u.card);
+          let moveIndex = -1;
+          for (let mi=moves.length-1;mi>=0;mi--) {
+            const move=moves[mi];
+            if (u.level >= Number(move.unlockLevel||[2,4,6][mi]||2) && Number(u.moveCooldowns?.[mi]||0)<=0) { moveIndex=mi; break; }
+          }
+          const move = moveIndex>=0 ? moves[moveIndex] : null;
+          const rawDamage = Number(u.damage||0) * (move ? Number(move.damageMultiplier||1) : 1) * (1 + Math.min(GAME_BALANCE.supportDamageBonusCap, supportBonus));
+          const targetPos = pathPosition(target.progress);
+          const targets = move && Number(move.splashRadius||0)>0
+            ? remaining.filter(e=>e.hp>0 && e.minUnitLevel<=u.level && !(e.movementType==='flying'&&!characterCanHitAir(u.card)) && distancePct(targetPos.x,targetPos.y,pathPosition(e.progress).x,pathPosition(e.progress).y)<=Number(move.splashRadius||0))
+            : [target];
+          for (const hitTarget of targets) {
+            if (hitTarget.hp<=0) continue;
+            let damage=rawDamage;
+            const shieldHit=Math.min(Math.max(0,Number(hitTarget.shield||0)),damage);
+            hitTarget.shield-=shieldHit; damage-=shieldHit;
+            if (damage>0) damage*=1-Number(hitTarget.armor||0);
+            hitTarget.hp-=damage;
+            if (hitTarget.hp<=0) cash+=Number(hitTarget.reward||0);
+          }
           u.cooldown = u.attackSpeed;
-          if (target.hp <= 0) cash += target.reward;
+          if (move) { u.moveCooldowns[moveIndex]=Math.max(0,Number(move.cooldownSeconds||0)); u.lastMove=move.name; }
         }
 
         remaining = remaining.filter(e => e.hp > 0 && e.progress < 1);
@@ -1013,14 +1137,14 @@ function Infinite({save,setSave,squad,setPage,notify,session}) {
     },Infinity);
     if (pathDist < 8) return notify('Place units beside the road, not on it.');
     if (run.cash < card.cost) return notify(`Need ${card.cost} cash to deploy ${card.name}.`);
+    const baseStats = characterLevelStats(card,1);
     const unit = {
-      card,
-      level:1,
-      x,y,
-      damage:card.role === 'money' ? 0 : card.baseDamage,
-      rangePct:card.role === 'money' ? 0 : Math.max(11,card.range/12),
-      attackSpeed:card.role === 'money' ? 0 : card.attackSpeed,
+      card, level:1, x,y,
+      damage:Number(baseStats.damage||0),
+      rangePct:Number(baseStats.range||0),
+      attackSpeed:Number(baseStats.attackSpeed||0),
       cooldown:card.role === 'money' ? 0 : 120,
+      moveCooldowns:characterMoves(card).map(()=>0),
     };
     setRun(r=>({...r,cash:r.cash-card.cost,units:[...r.units,unit]}));
     setPlacementMode(null);
@@ -1032,12 +1156,12 @@ function Infinite({save,setSave,squad,setPage,notify,session}) {
       if (!u) return r;
       const max = UPGRADE_LIMIT[u.card.rarity];
       if (u.level >= max) { notify(`${u.card.name} is maxed at Lv.${max}.`); return r; }
-      const cost = Math.round((90 + u.level*55 + rarityRank(u.card.rarity)*25) * 1);
-      if (r.cash < cost) { notify('Not enough cash for that upgrade.'); return r; }
+      const nextStats = characterLevelStats(u.card,u.level+1);
+      const cost = Math.max(0,Number(nextStats.upgradeCost||0));
+      if (r.cash < cost) { notify(`Not enough cash. ${u.card.name}'s next upgrade costs ${cost}.`); return r; }
       return {...r,cash:r.cash-cost,units:r.units.map((x,i)=>{
         if (i !== index) return x;
-        if (x.card.role === 'money') return {...x,level:x.level+1};
-        return {...x,level:x.level+1,damage:Math.round(x.damage*1.30),rangePct:x.rangePct+0.9,attackSpeed:Math.max(220,x.attackSpeed-38)};
+        return {...x,level:x.level+1,damage:Number(nextStats.damage||0),rangePct:Number(nextStats.range||0),attackSpeed:Number(nextStats.attackSpeed||0),moveCooldowns:(x.moveCooldowns||characterMoves(x.card).map(()=>0))};
       })};
     });
   };
@@ -1134,10 +1258,11 @@ function Infinite({save,setSave,squad,setPage,notify,session}) {
             <div className="core">🏯</div>
             {run.enemies.map(e=>{
               const p=pathPosition(e.progress);
-              return <div key={e.id} className={`enemy-token ${e.type}`} style={{left:`${p.x}%`,top:`${p.y}%`}}>
-                <div className="enemy-icon" aria-label={`${e.type} enemy`}>{enemyImage(e.type,e.name) ? <img src={enemyImage(e.type,e.name)} alt=""/> : ({boss:'♛',fast:'↯',tank:'⬟',regen:'✚',shield:'⬡',armored:'▣',normal:'◆'})[e.type] || '◆'}</div>
+              return <div key={e.id} className={`enemy-token ${e.type} ${e.movementType==='flying'?'is-flying':''} ${e.type==='boss'||e.type==='strong-2'?'is-heavy':''}`} style={{left:`${p.x}%`,top:`${p.y}%`}}>
+                <div className="enemy-icon" aria-label={`${e.type} enemy`}>{enemyImage(e.type,e.name) ? <img src={enemyImage(e.type,e.name)} alt=""/> : ({boss:'♛',fast:'↯',tank:'⬟',regen:'✚',shield:'⬡',armored:'▣',normal:'◆',flying:'✦','strong-1':'⬢','strong-2':'♜'})[e.type] || '◆'}</div>
                 <div className="enemy-health"><i style={{width:`${Math.max(0,(e.hp/e.maxHp)*100)}%`}}/></div>
                 {e.type==='boss' && <span className="boss-tag">{e.name}</span>}
+                {(!['normal','fast','tank','regen','shield','armored','flying','strong-1','strong-2','boss'].includes(e.type)) && <span className="enemy-name-tag">{e.name}</span>}
               </div>
             })}
             {run.units.map((u,i)=><button key={`${u.card.id}-${i}`} className={`placed-unit ${selectedUnit===i?'selected':''}`} style={{left:`${u.x}%`,top:`${u.y}%`,borderColor:RARITY_COLOR[u.card.rarity]}} onClick={e=>{e.stopPropagation();setSelectedUnit(i);}} title={`${u.card.name} Lv.${u.level}`}> 
@@ -1156,11 +1281,11 @@ function Infinite({save,setSave,squad,setPage,notify,session}) {
           {selectedUnitData && <div className="selected-unit-panel">
             <div className="selected-unit-head"><div><div className="eyebrow">SELECTED UNIT</div><h3>{selectedUnitData.card.name}</h3><span>{selectedUnitData.card.rarity} • Level {selectedUnitData.level}/{UPGRADE_LIMIT[selectedUnitData.card.rarity]}</span></div><button className="text-btn" onClick={()=>setSelectedUnit(null)}>CLOSE</button></div>
             <div className="unit-stat-preview">
-              {selectedUnitData.card.role === 'money' ? <div><span>INCOME ONLY</span><b>💰 {unitIncome(selectedUnitData)} / WAVE</b><small>No damage · no range · no attack speed</small></div> : <div><span>CURRENT</span><b>DMG {Math.round(selectedUnitData.damage)}</b><small>RANGE {selectedUnitData.rangePct.toFixed(1)} · SPA {(selectedUnitData.attackSpeed/1000).toFixed(2)}s</small></div>}
-              {selectedUnitData.level < UPGRADE_LIMIT[selectedUnitData.card.rarity] && (selectedUnitData.card.role === 'money' ? <div><span>NEXT UPGRADE</span><b>💰 {Math.round(unitIncome(selectedUnitData)*(1+GAME_BALANCE.incomeUpgradeMultiplier))} / WAVE</b><small>+{Math.round(GAME_BALANCE.incomeUpgradeMultiplier*100)}% income · +💰 {Math.round(unitIncome(selectedUnitData)*GAME_BALANCE.incomeUpgradeMultiplier)}</small></div> : <div><span>NEXT UPGRADE</span><b>DMG {Math.round(selectedUnitData.damage*1.30)} <i>+{Math.round(selectedUnitData.damage*.30)}</i></b><small>RANGE +0.9 · SPA −0.038s</small>{({2:selectedUnitData.card.abilities[0],4:selectedUnitData.card.abilities[1],6:selectedUnitData.card.abilities[2]})[selectedUnitData.level+1] && <em>Technique milestone: {({2:selectedUnitData.card.abilities[0],4:selectedUnitData.card.abilities[1],6:selectedUnitData.card.abilities[2]})[selectedUnitData.level+1]}</em>}</div>)}
+              {selectedUnitData.card.role === 'money' ? <div><span>CURRENT INCOME</span><b>💰 {unitIncome(selectedUnitData)} / WAVE</b><small>Level {selectedUnitData.level} · income-only unit</small></div> : <div><span>CURRENT</span><b>DMG {Math.round(selectedUnitData.damage)}</b><small>RANGE {selectedUnitData.rangePct.toFixed(1)} · SPA {(selectedUnitData.attackSpeed/1000).toFixed(2)}s</small>{selectedUnitData.lastMove&&<em>Last technique: {selectedUnitData.lastMove}</em>}</div>}
+              {selectedUnitData.level < UPGRADE_LIMIT[selectedUnitData.card.rarity] && (()=>{const next=characterLevelStats(selectedUnitData.card,selectedUnitData.level+1);const move=characterMoves(selectedUnitData.card).find(m=>Number(m.unlockLevel)===selectedUnitData.level+1);return <div><span>NEXT LEVEL · {levelStageLabel(selectedUnitData.level+1)}</span><b>{selectedUnitData.card.role==='money'?`💰 ${Math.round(next.income)} / WAVE`:`DMG ${Math.round(next.damage)} · RANGE ${Number(next.range).toFixed(1)}`}</b><small>{selectedUnitData.card.role==='money'?`+💰 ${Math.round(next.income-unitIncome(selectedUnitData))} / wave`:`SPA ${(Number(next.attackSpeed)/1000).toFixed(2)}s · DPS ${Math.round(Number(next.damage)/(Math.max(1,Number(next.attackSpeed))/1000))}`}</small>{move&&<em>Technique unlock: {move.name}</em>}{selectedUnitData.card.role==='support'&&<em>Support buff: {(Number(next.buffPercent||0)*100).toFixed(1)}%</em>}</div>})()}
             </div>
             <div className="selected-actions">
-              <button className="primary" disabled={selectedUnitData.level >= UPGRADE_LIMIT[selectedUnitData.card.rarity]} onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {Math.round(90 + selectedUnitData.level*55 + rarityRank(selectedUnitData.card.rarity)*25)}</button>
+              <button className="primary" disabled={selectedUnitData.level >= UPGRADE_LIMIT[selectedUnitData.card.rarity]} onClick={()=>upgrade(selectedUnit)}>UPGRADE — 💰 {selectedUnitData.level>=UPGRADE_LIMIT[selectedUnitData.card.rarity]?'MAX':Math.round(characterLevelStats(selectedUnitData.card,selectedUnitData.level+1).upgradeCost||0)}</button>
               <button className="danger" onClick={()=>{sellUnit(selectedUnit);setSelectedUnit(null);}}>SELL</button>
             </div>
           </div>}

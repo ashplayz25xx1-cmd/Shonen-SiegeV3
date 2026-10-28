@@ -1,4 +1,4 @@
-// Shonen Siege V3.3 — single place to balance the game and customize art.
+// Shonen Siege V3.5 — default game balance and artwork configuration.
 // Change rarity/stats in CHARACTER_OVERRIDES; add character images to public/characters and map them in CHARACTER_ART.
 // For enemy pictures, add images to public/enemies and map them in ENEMY_ART.
 
@@ -33,11 +33,34 @@ export const ENEMY_BALANCE = {
   regen:   { hp: 135, speed: 0.025, damage: 34, armor: 0, shield: 0, regen: 2.8 },
   shield:  { hp: 118, speed: 0.027, damage: 34, armor: 0, shield: 85, regen: 0 },
   armored: { hp: 175, speed: 0.021, damage: 34, armor: 0.22, shield: 0, regen: 0 },
+  // New enemy classes: air units and foes that require upgraded units to damage.
+  flying:  { hp: 105, speed: 0.044, damage: 34, armor: 0, shield: 0, regen: 0 },
+  'strong-1': { hp: 360, speed: 0.022, damage: 42, armor: 0.12, shield: 0, regen: 0 },
+  'strong-2': { hp: 920, speed: 0.016, damage: 55, armor: 0.26, shield: 0, regen: 0 },
   bosses: [
     { name: 'Ravager', hp: 2200, hpPerWave: 150, speed: 0.020, damage: 100, armor: 0.08, shield: 0 },
     { name: 'Warden', hp: 2700, hpPerWave: 170, speed: 0.016, damage: 100, armor: 0.16, shield: 800 },
     { name: 'Reaper', hp: 1900, hpPerWave: 135, speed: 0.026, damage: 100, armor: 0.06, shield: 400 },
   ],
+};
+
+// Runtime tunables saved by the owner in game_settings.combat_balance.
+// Character level rows and per-wave rows are populated by the in-game Admin → Balancing editor.
+export const DEFAULT_COMBAT_BALANCE = {
+  version: 1,
+  characters: {},
+  enemyWaves: {},
+  enemyMeta: {
+    normal: { movementType:'ground', minUnitLevel:1, spawnFromWave:1, spawnChance:0, customSpawn:false },
+    fast: { movementType:'ground', minUnitLevel:1, spawnFromWave:6, spawnChance:0, customSpawn:false },
+    tank: { movementType:'ground', minUnitLevel:1, spawnFromWave:10, spawnChance:0, customSpawn:false },
+    regen: { movementType:'ground', minUnitLevel:1, spawnFromWave:14, spawnChance:0, customSpawn:false },
+    shield: { movementType:'ground', minUnitLevel:1, spawnFromWave:18, spawnChance:0, customSpawn:false },
+    armored: { movementType:'ground', minUnitLevel:1, spawnFromWave:22, spawnChance:0, customSpawn:false },
+    flying: { movementType:'flying', minUnitLevel:1, spawnFromWave:8, spawnChance:0.14, customSpawn:true },
+    'strong-1': { movementType:'ground', minUnitLevel:2, spawnFromWave:12, spawnChance:0.12, customSpawn:true },
+    'strong-2': { movementType:'ground', minUnitLevel:3, spawnFromWave:20, spawnChance:0.08, customSpawn:true },
+  },
 };
 
 // Paths are relative to public/. Example: naruto: 'characters/naruto.webp'.
