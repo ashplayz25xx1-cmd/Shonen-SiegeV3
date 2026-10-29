@@ -1,7 +1,20 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isBackendConfigured } from './backend-config.js';
 
 const SESSION_KEY = 'shonen-siege-supabase-session-v1';
+const AUTH_CALLBACK_KEY = 'shonen-siege-auth-callback-type-v1';
 const baseUrl = () => SUPABASE_URL.replace(/\/$/, '');
+export function authRedirectUrl() {
+  if (typeof window === 'undefined') return 'https://ashplayz25xx1-cmd.github.io/Shonen-SiegeV3/';
+  // Do not send real players to localhost if they happen to open a development build.
+  if (['localhost', '127.0.0.1'].includes(window.location.hostname)) return 'https://ashplayz25xx1-cmd.github.io/Shonen-SiegeV3/';
+  return `${window.location.origin}${window.location.pathname}`;
+}
+export function getPendingAuthCallbackType() {
+  try { return localStorage.getItem(AUTH_CALLBACK_KEY) || ''; } catch { return ''; }
+}
+export function clearPendingAuthCallbackType() {
+  try { localStorage.removeItem(AUTH_CALLBACK_KEY); } catch {}
+}
 const headers = (session, extra = {}) => {
   // Legacy anon keys are JWTs and can be used as the anonymous bearer token.
   // New publishable keys are not JWTs, so send those only via `apikey`.
@@ -18,8 +31,11 @@ export function getStoredSession() {
   catch { return null; }
 }
 export function storeSession(session) {
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  else localStorage.removeItem(SESSION_KEY);
+  if (!session) { localStorage.removeItem(SESSION_KEY); return null; }
+  const expiresIn = Number(session.expires_in || 3600);
+  const normalized = { ...session, expires_at: Number(session.expires_at || (Math.floor(Date.now() / 1000) + expiresIn)) };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(normalized));
+  return normalized;
 }
 
 async function request(path, { session = null, method = 'GET', body, headers: extraHeaders = {}, raw = false } = {}) {
@@ -43,16 +59,42 @@ async function request(path, { session = null, method = 'GET', body, headers: ex
 }
 
 export async function signUp(email, password, username) {
-  const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : undefined;
-  const path = redirectTo ? `/auth/v1/signup?redirect_to=${encodeURIComponent(redirectTo)}` : '/auth/v1/signup';
+  const path = `/auth/v1/signup?redirect_to=${encodeURIComponent(authRedirectUrl())}`;
   const data = await request(path, { method: 'POST', body: { email, password, data: { username } } });
-  if (data?.access_token) storeSession(data);
+  if (data?.access_token) return storeSession(data);
   return data;
 }
 export async function signIn(email, password) {
   const data = await request('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } });
-  storeSession(data);
+  return storeSession(data) || data;
+}
+export async function requestPasswordReset(email) {
+  await request(`/auth/v1/recover?redirect_to=${encodeURIComponent(authRedirectUrl())}`, { method: 'POST', body: { email } });
+}
+export async function updatePassword(session, password) {
+  const data = await request('/auth/v1/user', { session, method: 'PUT', body: { password } });
   return data;
+}
+export async function resendSignupConfirmation(email) {
+  await request(`/auth/v1/resend?redirect_to=${encodeURIComponent(authRedirectUrl())}`, { method: 'POST', body: { type: 'signup', email } });
+}
+export async function requestEmailCode(email) {
+  // create_user:false ensures the passwordless form cannot silently create accounts.
+  await request(`/auth/v1/otp?redirect_to=${encodeURIComponent(authRedirectUrl())}`, { method: 'POST', body: { email, create_user: false } });
+}
+export async function verifyEmailCode(email, token) {
+  const data = await request('/auth/v1/verify', { method: 'POST', body: { email, token: String(token).trim(), type: 'email' } });
+  if (data?.access_token) return storeSession(data);
+  return data;
+}
+export function signInWithGoogle() {
+  if (typeof window === 'undefined') throw new Error('Google sign-in is only available in a browser.');
+  const params = new URLSearchParams({ provider: 'google', redirect_to: authRedirectUrl(), apikey: SUPABASE_ANON_KEY });
+  window.location.assign(`${baseUrl()}/auth/v1/authorize?${params.toString()}`);
+}
+export async function getCurrentAuthUser(session) {
+  if (!session?.access_token) return null;
+  return request('/auth/v1/user', { session });
 }
 export async function signOut(session) {
   try { if (session) await request('/auth/v1/logout', { session, method: 'POST' }); }
@@ -63,6 +105,8 @@ async function takeAuthCallbackFromUrl() {
   const url = new URL(window.location.href);
   const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
   const accessToken = hash.get('access_token');
+  const callbackType = hash.get('type') || url.searchParams.get('type') || '';
+  if (callbackType) { try { localStorage.setItem(AUTH_CALLBACK_KEY, callbackType); } catch {} }
   if (accessToken) {
     const expiresIn = Number(hash.get('expires_in') || 3600);
     const session = {
@@ -97,8 +141,7 @@ export async function restoreSession() {
   if (expiresAt && expiresAt * 1000 < Date.now() + 30_000 && old.refresh_token) {
     try {
       const next = await request('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: old.refresh_token } });
-      storeSession(next);
-      return next;
+      return storeSession(next) || next;
     } catch { storeSession(null); return null; }
   }
   try { await request('/auth/v1/user', { session: old }); return old; }
@@ -106,13 +149,14 @@ export async function restoreSession() {
 }
 export async function getProfile(session) {
   // Always fetch the signed-in user's own profile by auth user ID.
-  // Without this filter, an admin (who can read all profiles) could receive another player's row.
   if (!session?.access_token) return null;
   const user = await request('/auth/v1/user', { session });
   if (!user?.id) return null;
   const rows = await request(`/rest/v1/profiles?select=id,email,username,role,created_at&id=eq.${encodeURIComponent(user.id)}&limit=1`, { session });
-  return rows?.[0] || null;
+  if (!rows?.[0]) return null;
+  return { ...rows[0], auth_email_confirmed_at: user.email_confirmed_at || null, auth_created_at: user.created_at || null, auth_provider: user.app_metadata?.provider || 'email' };
 }
+
 export async function rpc(session, functionName, params = {}) {
   return request(`/rest/v1/rpc/${encodeURIComponent(functionName)}`, { session, method: 'POST', body: params });
 }
